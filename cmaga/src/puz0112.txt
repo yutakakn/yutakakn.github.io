@@ -1,0 +1,152 @@
+/* 2001/11/23 - 11/25
+ *
+ * puz0112.c    with gcc 2.96(RedHat Linux 7.1)
+ *
+ * CMAGAZINE 2001/12 No.129[素数で割り切る素数の和]
+ *
+ * Copyright (C)1996-2001 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <assert.h>
+#include <math.h>
+
+/*
+ *
+ * 以下、コンパイラへの指示
+ *
+ */
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+
+/* bcc32 -P または gcc で有効になる */
+#if defined(__BCPLUSPLUS__) || defined(__GNUC__)
+	#define INLINE inline    /* インライン関数 */
+#else
+	#define INLINE
+#endif
+
+#if defined(__GNUC__)
+	typedef long long int int64;  /* 64bit型変数(gcc拡張機能) */
+#endif
+
+
+/*
+ *
+ * 以下、データ定義
+ *
+ */
+
+/* 素数判定用テーブル */
+int *primetable = NULL;
+int prime_count;
+int PRIME_MAX = 1000;
+
+
+
+/*
+ *
+ * 以下、処理ルーチン
+ *
+ */
+
+/* 与えられた数値が素数かどうか判別 */
+int is_prime(int n)
+{
+	int i, p;
+
+	/* √n 未満の素数で割れるかどうかを試す */
+	for (i = 0 ; i < prime_count ; i++) {
+		p = primetable[i];
+		if (p * p > n)
+			break;
+		if (n % p == 0)
+			return 0;
+	}
+
+	return 1;   /* nは素数 */
+}
+
+/* 素数テーブルを作成 */
+void make_prime(void)
+{
+	int i, n;
+
+	/* まだテーブルが作成されていない場合 */
+	if (primetable == NULL) {
+		primetable = malloc(PRIME_MAX * sizeof(int));
+		if (primetable == NULL) {
+			printf("Not memory! (%d)\n", PRIME_MAX * sizeof(int));
+			exit(1);
+		}
+		primetable[0] = 2;
+		primetable[1] = 3;
+		primetable[2] = 5;
+		i = 3;
+		n = primetable[i - 1] + 2;
+
+	} else {
+		/* テーブルがすでに作成されていて、素数の数を2倍に増やす */
+		PRIME_MAX *= 2;
+		primetable = realloc(primetable, PRIME_MAX * sizeof(int));
+		if (primetable == NULL) {
+			printf("Not memory! (%d)\n", PRIME_MAX * sizeof(int));
+			exit(1);
+		}
+		i = prime_count;
+		n = primetable[i - 1] + 2;
+	}
+
+	while (i < PRIME_MAX) {
+		if (is_prime(n)) {
+			primetable[i++] = n;
+			prime_count = i;
+		}
+		n += 2;
+	}
+
+#if 0
+	for (i = 0 ; i < prime_count ; i++)
+		printf("%d: %d\n", i, primetable[i]);
+	printf("\n");
+#endif
+}
+
+
+int main(void)
+{
+	clock_t tick = clock();
+	int i, val, cnt, start;
+	int64 sum;  /* 素数の和(64bit) */
+
+	cnt = 0;   /* 解の個数 */
+	start = 1;
+	sum = 2;   /* 最初の素数は2 */
+
+	/* 5と71以外に解が見つかったら終わり */
+	while (cnt < 3) {
+		make_prime();
+
+		/* 素数の和を計算しながら解を探す */
+		for (i = start ; i < prime_count ; i++) {
+			val = primetable[i];
+
+			if (sum % val == 0) {
+				printf("%d (%Ld = %d × %Ld)\n", val, sum, val, sum / val);
+				cnt++;
+			}
+			sum += val;
+			assert(sum > 0);
+		}
+		start = prime_count;
+	}
+
+    printf("time %.2f\n", (double)((clock() - tick) / CLOCKS_PER_SEC));
+
+	return 0;
+}
+
+

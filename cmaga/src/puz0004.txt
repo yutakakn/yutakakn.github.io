@@ -1,0 +1,357 @@
+/* 2000/3/21 - 3/25
+ *
+ * puz0004.c    with Borland C++Builder4
+ * CMAGAZINE 2000/4 No.109[Ｆペントミノ]
+ *
+ * Copyright (C)1996-2000 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define SSIZE 8                   /* 盤のサイズ */
+#define SIZE (SSIZE + 1)
+#define pos(x,y) ((x) + (y)*SIZE)
+#define X(n) ((n) % SIZE)
+#define Y(n) ((n) / SIZE)
+#define MAXPOS (SIZE * (SSIZE-1) + SSIZE)
+
+#define EMPTY 0
+#define U -1
+#define WALL 20
+
+char Pentomino[4*4] = {  /* Fペントミノ・ビットマップ */
+	"-**-"
+	"**--"
+	"-*--"
+	"----"
+};
+
+typedef struct {
+	int x, y;
+}point_t;
+point_t Point[5]; /* XY座標値によるペントミノデータ */
+
+typedef struct {
+	int shape[8][5];
+	int n_shape;
+}shape_t;
+shape_t Shape;    /* オフセット値によるペントミノデータ(最大8パターン) */
+
+
+int piece[8][5];                   /* Fペントミノ位置データ */
+int board[SIZE*SIZE];          /* 盤 */
+int ans_board[20][SIZE*SIZE];      /* 解記録用 */
+int u_cnt = 0, pentomino_cnt = 0;
+int ans_cnt = 0;
+int max_pentomino_cnt = 12;
+int max_u_cnt = 4;
+
+/* -------------------------------------------------------- 
+ * ここから以下、探索処理。
+ * -------------------------------------------------------- 
+ */
+
+void board_disp(int brd[])
+{
+	int x, y, c;
+	
+	for (y = 0 ; y < SSIZE ; y++) {
+		for (x = 0; x < SSIZE ; x++) {
+			c = brd[pos(x,y)];
+			printf("%c ", c>0 ? 'A'+c-1 : '-');
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+
+/* 盤を左右裏返し */
+void reverse_board(int board[])
+{
+	int x, y, tmp;
+	
+	for (y = 0 ; y < SIZE ; y++) {
+		for (x = 0 ; x < SIZE/2 ; x++) {
+			tmp = board[pos(x,y)];
+			board[pos(x,y)] = board[pos(7-x,y)];
+			board[pos(7-x,y)] = tmp;
+		}
+	}
+}
+
+/* 盤を右に90°回転 */
+void rotate_board(int board[])
+{
+	static int tmp[SIZE*SIZE];
+	int x, y;
+	
+	for (y = 0 ; y < SIZE ; y++) {
+		for (x = 0 ; x < SIZE ; x++) {
+			tmp[pos(7-y,x)] = board[pos(x,y)];
+		}
+	}
+	for (y = 0 ; y < SIZE ; y++) {
+		for (x = 0 ; x < SIZE ; x++) {
+			board[pos(x,y)] = tmp[pos(x,y)];
+		}
+	}
+}
+
+/* 同形チェック */
+int is_same(int a_board[], int b_board[])
+{
+	int i, s, c, x, y;
+	
+	for (i = 1 ; i <= max_pentomino_cnt ; i++) {
+		c = -10;
+		for (y = 0 ; y < SIZE ; y++) {
+			for (x = 0 ; x < SIZE ; x++) {
+				if (a_board[pos(x,y)] == i) {
+					if (c == -10)
+						c = b_board[pos(x,y)];
+					else if (c != b_board[pos(x,y)])
+						return 0;
+				}
+			}
+		}
+	}
+	return 1;  /* 同じ */
+}
+
+/* 回転・裏返しのチェック */
+void check(void)
+{
+	int i, j;
+	
+	for (i = 0 ; i < ans_cnt ; i++) {
+		for (j = 0 ; j < 4 ; j++) {
+			if (is_same(ans_board[i], board))
+				goto skip;
+			rotate_board(ans_board[i]);
+		}
+		reverse_board(ans_board[i]);
+		for (j = 0 ; j < 4 ; j++) {
+			if (is_same(ans_board[i], board))
+				goto skip;
+			rotate_board(ans_board[i]);
+		}
+	}
+skip:;
+	if (i == ans_cnt) {  /* 解として記録 */
+		for (j = 0 ; j < SIZE*SIZE ; j++) {
+			ans_board[ans_cnt][j] = board[j];
+		}
+		ans_cnt++;
+	}
+}
+
+/* 探索処理 */
+void sub(int site)
+{
+	int recsite[5];
+	int i, j, tmp;
+
+	/* 枝刈 */
+	if (u_cnt >= max_u_cnt - 2) return;
+	
+	if (site >= pos(0,6)) {  /* 下位2ブロックには置けない */
+		if (pentomino_cnt == max_pentomino_cnt) {
+			check();
+		}
+		return;
+	}
+
+	/* site位置に置けるかを試す */
+	for (i = 0; i < 8 ; i++) {  /* 8パターン */
+		for (j = 0 ; j < 5 ; j++) {
+			recsite[j] = site + piece[i][j];
+			if (board[recsite[j]]) break;
+		}
+		if (j != 5) continue;
+		
+		pentomino_cnt++;
+		for (j = 0 ; j < 5 ; j++) {
+			board[recsite[j]] = pentomino_cnt;
+		}
+		tmp = site;
+		while (board[++tmp] != 0)
+			;
+		sub( tmp );
+
+		pentomino_cnt--;
+		for (j = 0 ; j < 5 ; j++) {
+			board[recsite[j]] = 0;
+		}
+	}
+	
+	board[site] = U;
+	u_cnt++;
+	tmp = site;
+	while (board[++tmp] != 0)
+		;
+	sub( tmp );
+	u_cnt--;
+	board[site] = 0;
+}
+
+/* 盤の初期化 */
+void board_init(void)
+{
+	int i, j;
+	
+	for (i = 0 ; i < SIZE ; i++) {
+		for (j = 0 ; j < SIZE ; j++) {
+			if (i == SIZE-1 || j == SIZE-1) 
+				board[ pos(i,j) ] = WALL;
+			else
+				board[ pos(i,j) ] = 0;
+		}
+	}
+	board[ pos(SIZE-1,SIZE-1) ] = 0;  /* 番兵 */
+}
+
+/* -------------------------------------------------------- 
+ * ここから以下、ビットマップから位置情報を取得する処理。
+ * -------------------------------------------------------- 
+ */
+
+void shape_disp(shape_t s)
+{
+	int i, j;
+	
+	printf("%d pattern(s)\n", s.n_shape);
+	for (i = 0 ; i < s.n_shape; i++) {
+		for (j = 0 ; j < 5 ; j++) 
+			printf("%2d, ", s.shape[i][j]);
+		printf("\n");
+	}
+}
+
+/* 左右反転 */
+void reverse(point_t *p)
+{
+	int i;
+
+	for (i = 0 ; i < 5 ; i++) {
+		p[i].x = -p[i].x;
+	}
+}
+
+/* 90度回転 */
+void rotate(point_t *p)
+{
+	int i, t;
+
+	for (i = 0 ; i < 5 ; i++) {
+		t = p[i].x;
+		p[i].x = -p[i].y;
+		p[i].y = t;
+	}
+}
+
+/* 昇順にソート */
+void sort(int s[],int n)
+{
+	int i, j;
+	int a;
+	
+	for (i = 0 ; i < n ; i++) {
+		for (j = n - 1 ; j > i ; j--) {
+			if (s[j] < s[j-1]) {
+				a = s[j];
+				s[j] = s[j-1];
+				s[j-1] = a;
+			}
+        }
+    }
+}
+
+/* XY座標を持つデータを１次元配列添え字用に変換 */
+void makeData(shape_t *shape, point_t *point)
+{
+	int i, j, n;
+	int tmp[5];
+	
+	n = shape->n_shape;
+	for (i = 0 ; i < 5 ; i++) {
+		tmp[i] = pos(point[i].x, point[i].y);
+    }
+    
+    sort(tmp, 5);
+    
+	for (i = 0 ; i < 5 ; i++) {
+		shape->shape[n][i] = tmp[i] - tmp[0];
+	}
+	for (i = 0 ; i < n ; i++) {   /* 同形チェック */
+		for (j = 0 ; j < 5 ; j++)
+			if (shape->shape[n][j] != shape->shape[i][j])
+				break;
+		if (j == 5) return;
+	}
+	shape->n_shape++;
+}
+
+/* ペントミノビットマップからピース情報を採取する */
+void init(void)
+{
+	int x, y, n, i;
+
+	/* ペントミノ・ビットマップからXY座標値を得る */
+	n = 0;
+	for (y = 0 ; y < 4 ; y++) {
+		for (x = 0 ; x < 4 ; x++) {
+			if (Pentomino[x + y*4] == '*') {
+				Point[n].x = x;
+				Point[n].y = y;
+				n++;
+			}
+		}
+	}
+
+	/* XY座標値から8パターン分の相対位置へ変換 */
+	Shape.n_shape = 0;
+	for (i = 0 ; i < 4; i++) {
+		makeData(&Shape ,Point);
+		rotate(Point);
+	}
+	reverse(Point);
+	for (i = 0 ; i < 4; i++) {
+		makeData(&Shape ,Point);
+		rotate(Point);
+	}
+/*	shape_disp(Shape);*/
+
+	for (i = 0 ; i < Shape.n_shape ; i++) {
+		for (n = 0 ; n < 5 ; n++) 
+			piece[i][n] = Shape.shape[i][n];
+	}
+}
+
+int main(void)
+{
+	clock_t t = clock();
+	int i;
+	
+	init();
+	
+	for (i = 12; i > 0 ; i--) { /* 12枚から探索を開始 */
+		printf("ペントミノ %d Uピース %d\n", max_pentomino_cnt, max_u_cnt);
+		u_cnt = 0, pentomino_cnt = 0;
+		ans_cnt = 0;
+		board_init();
+		sub(0);
+		if (ans_cnt > 0) break;
+		max_pentomino_cnt--;
+		max_u_cnt += 5;
+	}
+	printf("解: 最大 %d 枚  %d 通り\n", max_pentomino_cnt, ans_cnt);
+	for (i = 0 ; i < ans_cnt ; i++) {
+		board_disp(ans_board[i]);
+	}
+
+    printf("time %f\n", (clock() - t) / CLK_TCK);
+	return 0;
+}
+

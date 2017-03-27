@@ -1,0 +1,141 @@
+/*'96/9/30 - 10/1
+ *Ｃマガジン '96/10月号　『Ｃマガ電脳クラブ　第６７回』　
+ *  with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9610.C
+ *
+ *標題「三乗の参上」
+ *
+ *Copyright (C) 1995-1996 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+
+#define M 1625    /* unsigned long型で扱える最大値 = 1625^3 */
+
+typedef unsigned long ulong;
+
+ulong n3[ M ];    /* あらかじめ３乗のテーブルを作っておく */
+ulong buf[8192];  /* ３乗の差を入れるバッファ */
+int cnt;          /* 実際にﾊﾞｯﾌｧへ入った個数 */
+ulong ans;        /* 解 */
+
+/*A^3 - B^3 = C^3 - D^3 = E^3 - F^3 = G^3 - H^3 を見つける。
+ *すでに ans にその差（＝Ｘ）が入っている。
+ */
+void answer(void)
+{
+	int i,j;
+	ulong x;
+
+	for(i = 2 ; i < M ; i++){
+		x = n3[i] - n3[i-1];
+		if(x > ans) break;
+		for(j = i - 1 ; j >= 1 ; j--){
+			x = n3[i] - n3[j];
+			if(x == ans) printf("(%d^3 - %d^3) ",i,j);
+			if(x > ans) break;
+		}
+	}
+	putchar('\n');
+}
+
+/* ソートされたバッファの中で連続した数値が４つあれば、それが解。 */
+int check(void)
+{
+	int i;
+	for(i = 0 ; i < cnt - 3; i++)
+		if(buf[i] == buf[i+1]){ /*実行効率にため、ここも少し工夫*/
+			if(buf[i+1] == buf[i+2]){
+				if(buf[i+2] == buf[i+3]){
+					printf("\n解 %lu\n",buf[i]);
+					ans = buf[i];
+					return 1;
+				}else i += 2;
+			}else i++;
+		}
+	return 0;
+}
+
+/*クイックソートです。
+ *もちろん qsort 関数を使えばよいのですが、従来の方法でコンパイルすると
+ *Turbo C++ 4.0ではコンパイルエラーが出てしまう。
+ *初心者の私にはどうすればよいのか分からないので、自作しました。
+ *
+ *【参考文献】
+ *Ｃ言語によるはじめてのアルゴリズム入門　河西朝雄　著（技術評論社）\2800
+ */
+void sort(int left,int right)
+{
+	int i,j,m;
+	ulong s,t;
+
+	if(left < right){
+		s = buf[ (left + right)/2 ];
+		i = left - 1;
+		j = right + 1;
+		for(;;){
+			while( buf[++i] < s);
+			while( buf[--j] > s);
+			if(i >= j) break;
+			t = buf[i]; buf[i] = buf[j] ; buf[j] = t;
+		}
+		sort(left , i - 1);
+		sort(j + 1 , right);
+	}
+}
+
+/* min ～ max まで間の差を検索して、バッファへ格納します。 */
+void search(ulong min,ulong max)
+{
+	int i,j;
+	ulong x,*p;
+
+	p = buf;
+	cnt = 0;
+	for(i = 2; i < M ; i++){
+		x = n3[i] - n3[i-1];
+		if(x > max) break;    /*枝刈*/
+		for(j = i - 1; j >= 1 ; j--){  /*ループを工夫*/
+			x = n3[i] - n3[j];
+			if(x > max) break;  /*これ以上は x が大きくなるだけなので*/
+			if(x >= min && x <= max){
+				*p++ = x;
+				cnt++;
+				if(cnt >= 8192){  /*念のため、境界ﾁｪｯｸ*/
+					puts("ﾊﾞｯﾌｧのｻｲｽﾞが足りない"); exit(1);
+				}
+			}
+		}
+	}
+}
+
+void sub(void)
+{
+	ulong min,max;
+
+	min = 1;
+	for(max = 1000000L ; max < ULONG_MAX ; max += 1000000L){
+		/*printf("%lu ～ %lu を探索...",min,max);*/
+		search(min,max);
+		sort(0 , cnt - 1);
+		if( check() ) break;
+		/*printf("解なし\n");*/
+		min = max - max/10;/*境界をもらすかもしれないので少し前も含むように*/
+	}
+	answer();    /* 構成する数字を探す */
+}
+
+int main(void)
+{
+	int i;
+
+	puts("Ｃマガジン '96/10月号　『Ｃマガ電脳クラブ　第６７回』");
+
+	for(i = 1 ; i < M ; i++) n3[i] = (ulong)i*i*i; /*３乗を作る*/
+	sub();
+
+	return 0;
+}

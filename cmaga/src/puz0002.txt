@@ -1,0 +1,110 @@
+/* 2000/1/24 - 1/28
+ *
+ * puz0002.c  with C++Builder3(Windows95)
+ * CMAGAZINE 2000/2 No.107[欲張りな２数]
+ *
+ * Copyright (C)1996-2000 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <time.h>
+
+/* 2乗値のテーブル */
+long two[310];
+int two_cnt;
+
+/* 判定用素数テーブル */
+long prime[100];
+int prime_cnt;
+
+/* 解の個数 */
+int ans_cnt = 0;
+
+int isKomachi(long a, long b, long *ans)
+{
+	static char buf[10], use[10];
+	double cal;
+	long sum;
+	int i, n;
+
+	cal = (double)a * b;
+	if (cal < 123456789.0 || cal > 987654321.0) return 0;
+	*ans = (long)cal;
+
+	sprintf(buf, "%ld", *ans);
+	memset(use, 0, sizeof(use));
+	for (i = 0 ; i < 9 ; i++) {
+		n = buf[i] - '0';
+		if (use[n] == 1) return 0;
+		if (n == 0) return 0;
+		use[n] = 1;
+	}
+	return 1;
+}
+
+int isPrime(long n)
+{
+	long d;
+	int i;
+	
+	if (n % 2 == 0) return 0;
+	
+	for (i = 0 ; i < prime_cnt ; i++) {
+		if (prime[i] * prime[i] > n) break;
+		if (n % prime[i] == 0) return 0;
+	}
+	return 1;
+}
+
+void sub(void)
+{
+	int i;
+	long A, B, C, t, diff;
+	
+	for (i = 0; i < two_cnt ; i++) {
+		t = two[i];
+		for (B = 10000 ; B < t / 2 ; B++) {
+			A = t - B;         /* 和が平方数となるようにA,Bを決定 */
+			if (A > 99999) continue;
+
+			/* 小町数の性質による枝刈 */
+			if (!( (A % 3 == 0 && B % 3 == 0) || (A % 9 == 0) || 
+				(B % 9 ==0) )) continue;
+			
+			diff = A - B;
+			if (isPrime(diff) == 0) continue;   /* 差が素数？ */
+			if (isKomachi(A, B, &C) == 1) {     /* 積が小町数？ */
+				printf("(%ld, %ld) "
+					   "A+B=%ld A-B=%5ld A*B=%ld\n", A, B, t, diff, C);
+				ans_cnt++;
+			}
+		}
+	}
+}
+
+int main(void)
+{
+	clock_t t = clock();
+	int i;
+
+	two_cnt = 0;
+	for (i = 142 ; i <= 362 ; i++) {
+		two[two_cnt++] = (long)i * i;
+	}
+	
+	prime_cnt = 0;
+	for (i = 3 ; i <= 300 ; i += 2) {
+		if (isPrime(i) == 1) 
+			prime[prime_cnt++] = i;
+	}
+
+	sub();
+	printf("%d 通り\n", ans_cnt);
+
+    printf("time %f\n", (clock() - t) / CLK_TCK);
+	return 0;
+}
+

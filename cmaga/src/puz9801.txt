@@ -1,0 +1,104 @@
+/*'98/1/4
+ *Ｃマガジン '98/1月号『Ｃマガ電脳クラブ　第８２回』　
+ *　with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9801.C
+ *
+ *標題【省メモリものさし】
+ *
+ *Copyright (C)1995-1998 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ *<e-mail>yutaka@timpani.seg.kobe-u.ac.jp
+ *<URL>http://www25.seg.kobe-u.ac.jp/yutaka/
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define POS 9   /* 目盛り箇所数 */
+
+int use[37];    /* 使用済みチェック */
+int m[ POS ];   /* 目盛り */
+int max,rest;
+int maxlen;     /* 解（最長） */
+int ans[POS];   /* 解 */
+
+int sub(int n)
+{
+	int prev,i,sa;
+
+	if(n >= POS - 1){
+		int ret = 0;
+
+		if(rest > POS-1) return 0;   /* 枝刈 */
+
+		prev = rest;
+		for(i = 0 ; i < n ; i++){  /* 組み合わせ */
+			sa = m[n] - m[i];
+			use[sa]++;
+			if(use[sa] == 1) rest--;
+		}
+		if(rest == 0){
+			if(max > maxlen){
+				maxlen = max;
+				for(i = 0 ; i < POS ; i++) ans[i] = m[i];
+			}
+			ret = 1;
+		}
+		for(i = 0 ; i < n ; i++){
+			sa = m[n] - m[i];
+			use[sa]--;
+		}
+		rest = prev;
+		return( ret );
+	}
+
+	/* 枝刈:n + (n+1) + ... + (POS-1) = 計れる最大センチ数 */
+	i = POS*(POS-1)/2 - n*(n-1)/2;
+	if(rest > i) return 0;
+
+	for(m[n] = m[n-1]+1 ; m[n] <= max - (POS-1-n) ; m[n]++){
+		prev = rest;
+		for(i = 0 ; i < n ; i++){  /* 組み合わせ */
+			sa = m[n] - m[i];
+			use[sa]++;
+			if(use[sa] == 1) rest--;
+		}
+
+		if(	sub(n + 1) == 1 ) return 1;
+
+		for(i = 0 ; i < n ; i++){
+			sa = m[n] - m[i];
+			use[sa]--;
+		}
+		rest = prev;
+	}
+	return 0;
+}
+
+int main(void)
+{
+	clock_t t;
+	int i,start,end;
+
+	t = clock();
+
+	start = POS - 1;
+	end = POS * (POS-1) / 2;
+	printf("目盛り %d か所で最長 %d ～ %d を調べています\n",POS,start,end);
+	m[0] = 0;
+	maxlen = 0;
+
+	for(max = start ; max <= end ; max++){
+		m[POS-1] = rest = max;
+		for(i = 0 ; i <= max ; i++) use[i] = 0;
+		sub(1);
+	}
+	for(i = 0 ; i < POS ; i++) printf("%d ",ans[i]);
+	printf("解：最長 %d\n",maxlen);
+
+	t = clock() - t;
+	printf("実行時間 %8.2f 秒\n",(double)t / CLOCKS_PER_SEC);
+
+	return 0;
+}

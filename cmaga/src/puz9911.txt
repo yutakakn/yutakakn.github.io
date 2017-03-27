@@ -1,0 +1,123 @@
+/*1999/10/26
+ *
+ *puz9911.c  with C++Builder3(Windows95)
+ *CMAGAZINE 1999/11 No.104[Hoppers]
+ *
+ *Copyright (C)1995-1999 平田豊
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+enum {
+	A, B, C, D, E, F, G, H, I, J, K, L, M
+};
+
+typedef struct {
+	int pair[4][2];
+	int max;
+}Coin;
+
+/* 各円において移動できる場所 */
+Coin map[13] = {
+	{{B,C, F,K, D,G, 0,0}, 3}, /* A */
+	{{G,L, D,F, E,H, 0,0}, 3}, /* B */
+	{{B,A, H,M, E,G, 0,0}, 3}, /* C */
+	{{G,J, 0,0, 0,0, 0,0}, 1}, /* D */
+	{{G,I, 0,0, 0,0, 0,0}, 1}, /* E */
+	{{G,H, D,B, I,L, 0,0}, 3}, /* F */
+	{{D,A, E,C, I,K, J,M}, 4}, /* G */
+	{{G,F, E,B, J,L, 0,0}, 3}, /* H */
+	{{G,E, 0,0, 0,0, 0,0}, 1}, /* I */
+	{{G,D, 0,0, 0,0, 0,0}, 1}, /* J */
+	{{F,A, L,M, I,G, 0,0}, 3}, /* K */
+	{{G,B, I,F, J,H, 0,0}, 3}, /* L */
+	{{L,K, H,C, J,G, 0,0}, 3}, /* M */
+};
+
+/* コインの配置状態 */
+int coins[13] = {1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1};
+
+int rec_coins[11][13]; /* 記録用 */
+int rec_step[11];
+int ans_rec_coins[11][13]; /* 記録用（解） */
+int ans_rec_step[11];
+
+int step = 0;
+int min_step = 11;   /* 最小手数 */
+
+void disp(int *coins)
+{
+	int i;
+	
+	for (i = 0 ; i < 13 ; i++) {
+		if (i == 3 || i == 8) 
+			printf("  ");
+		printf("%s  ", coins[i]?"●":"○");
+		if (i == 2 || i == 4 || i == 7 || i == 9 || i == 12)
+			printf("\n");
+	}
+	printf("\n");
+}
+
+/* 探索処理(num:コインの数、prev_coin:1手前のコイン) */
+void sub(int num, int prev_coin)
+{
+	int i, c, s1, s2, k;
+	
+	if (num == 1) {
+		if (coins[G] == 1) {  /* 解 */
+			if (step < min_step) {
+				min_step = step;
+				for (i = 0 ; i < 11 ; i++) {
+					for (k = 0 ; k < 13; k++)
+						ans_rec_coins[i][k] = rec_coins[i][k];
+					ans_rec_step[i] = rec_step[i];
+				}
+			}
+		}
+		return;
+	}
+	
+	for (c = 0 ; c < 13 ; c++) {
+		if (coins[c] == 0) continue;   /* コインがない */
+		
+		for (i = 0 ; i < map[c].max ; i++) {
+			s1 = map[c].pair[i][0];
+			s2 = map[c].pair[i][1];
+			if (coins[s1] == 1 && coins[s2] == 0) {  /* 飛び越せる */
+				coins[c] = 0; coins[s1] = 0; coins[s2] = 1;
+				if (c != prev_coin) step++;
+				for (k = 0 ; k < 13 ; k++) {
+					rec_coins[12-num][k] = coins[k];
+				}
+				rec_step[12-num] = step;
+				
+				sub(num - 1, s2);
+
+				if (c != prev_coin) step--;
+				coins[c] = 1; coins[s1] = 1; coins[s2] = 0;
+			}
+		}
+		if (num == 12) break;   /* 1手目は"A"円しかない */
+	}
+}
+
+int main(void)
+{
+	clock_t t = clock();
+	int k;
+	
+	sub(12, -1);
+
+	for (k = 0 ; k < 11; k++) {
+		printf("%d 手目:\n", ans_rec_step[k]);
+		disp( ans_rec_coins[k] );
+	}
+	printf("最小手数 %d\n", min_step);
+    
+    printf("time %f\n", (clock() - t) / CLK_TCK);
+	return 0;
+}
+

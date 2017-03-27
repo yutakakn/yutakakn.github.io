@@ -1,0 +1,537 @@
+/* 2002/1/2 - 1/14
+ *
+ * puz0201.c    with Visual C++ 6.0(Windows2000)
+ *
+ * CMAGAZINE 2002/01 No.130[見た目は月並みですが]
+ *
+ * Copyright (C)1996-2002 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <assert.h>
+
+//#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+
+#define ELEM(n) (sizeof(n) / sizeof(n[0]))
+
+
+/* 1月～12月までの英単語の定義 */
+#define MONTH_NUM 12
+
+typedef struct {
+	char *name;  /* 月の名前 */
+	int len;     /* 名前の長さ */
+} month_t;
+
+month_t monthword[MONTH_NUM] = {
+	{"JANUARY",   7},
+	{"FEBRUARY",  8},
+	{"MARCH",     5},
+	{"APRIL",     5},
+	{"MAY",       3},
+	{"JUNE",      4},
+	{"JULY",      4},
+	{"AUGUST",    6},
+	{"SEPTEMBER", 9},
+	{"OCTOBER",   7},
+	{"NOVEMBER",  8},
+	{"DECEMBER",  8},
+};
+
+
+/* 各アルファベットのリンク状態
+ * アルファベットがどの単語のどの位置にリンクできるかを表す。
+ */
+typedef struct {
+	int num;         /* 個数(0ならリンクなし) */
+
+	struct site {
+		int no;      /* 月番号(0-11) */
+		int offset;  /* オフセット */
+	} site[100];
+
+} alpha_link_t;
+
+alpha_link_t alpha_link[256];  /* A～Z */
+
+
+#define W (40 + 1)
+#define H (40 + 1)
+#define MAX_SIZE (W * H)
+#define POS(x,y) ((x) + (y) * (W))
+#define X(pos) ((pos) % W)
+#define Y(pos) ((pos) / W)
+
+#define EMPTY 0
+#define WALL '*'
+
+/* 盤面 */
+int board[MAX_SIZE];
+int board_count[MAX_SIZE];
+
+int use[MONTH_NUM];  /* 単語の使用チェックフラグ */
+
+
+/* リンクした単語の位置情報 */
+#define HOR 0   /* 横置き */
+#define VER 1   /* 縦置き */
+
+typedef struct {
+	int dir;      /* 単語を配置する方向（横か縦か）*/
+	int pos;      /* 単語の配置位置 */
+	int offset;   /* pos位置にある単語のオフセット */
+} word_t;
+
+word_t word[MONTH_NUM];
+
+
+/* 面積情報 */
+int min_area_size = 120;
+int gxmin, gxmax, gymin, gymax;
+
+
+/*
+ * 以下、処理ルーチン
+ */
+
+void debug(void)
+{
+	int i;
+
+	for (i = 0 ; i < MONTH_NUM ; i++) {
+		if (use[i]) {
+			printf("%-10s: pos=%d offset=%d dir=%d\n",
+				monthword[i].name, word[i].pos, word[i].offset, word[i].dir);
+		}
+	}
+}
+
+void disp(int *board)
+{
+	int x, y, c;
+
+	for (y = 0 ; y < H ; y++) {
+		for (x = 0 ; x < W ; x++) {
+			c = board[POS(x,y)];
+			if (c == 0)
+				c = ' ';
+
+			printf("%c", c);
+		}
+		printf("\n");
+	}
+	printf("\n");
+
+}
+
+
+void init_board(void)
+{
+	int x, y;
+
+	for (y = 0 ; y < H ; y++) {
+		for (x = 0 ; x < W ; x++) {
+			if (x == W - 1 || y == H - 1)
+				board[POS(x,y)] = WALL;
+			else
+				board[POS(x,y)] = 0;
+		}
+		board_count[POS(x,y)] = 0;
+	}
+}
+
+int get_area_size(void)
+{
+	int x, y, c;
+	int xmin, xmax, ymin, ymax;
+	int size;
+
+	xmin = xmax = ymin = ymax = -1;
+
+	for (y = 0 ; y < H - 1 ; y++) {
+		for (x = 0 ; x < W - 1 ; x++) {
+			c = board[POS(x,y)];
+
+			if (c != 0) {
+				ymin = y;
+				goto skip1;
+			}
+		}
+	}
+skip1:;
+
+	for (y = H - 2 ; y >= 0 ; y--) {
+		for (x = 0 ; x < W - 1 ; x++) {
+			c = board[POS(x,y)];
+
+			if (c != 0) {
+				ymax = y;
+				goto skip2;
+			}
+		}
+	}
+skip2:;
+
+	for (x = 0 ; x < W - 1 ; x++) {
+		for (y = 0 ; y < H - 1 ; y++) {
+			c = board[POS(x,y)];
+
+			if (c != 0) {
+				xmin = x;
+				goto skip3;
+			}
+		}
+	}
+skip3:;
+
+	for (x = W-2 ; x >= 0 ; x--) {
+		for (y = 0 ; y < H - 1 ; y++) {
+			c = board[POS(x,y)];
+
+			if (c != 0) {
+				xmax = x;
+				goto skip4;
+			}
+		}
+	}
+skip4:;
+
+/*	printf("%d-%d %d-%d\n", xmin, xmax, ymin, ymax);*/
+
+	size = (xmax - xmin + 1) * (ymax - ymin + 1);
+
+	return (size);
+}
+
+
+/* 単語を盤面上から取り除く
+ *
+ * no: 月番号
+ */
+void unput_word_on_board(int no)
+{
+	int i, j, pos, offset, dir;
+	int len, site, tpos;
+	const int center = POS(20, 20);
+
+	i = no;
+
+	pos = word[i].pos;
+	offset = word[i].offset;
+	dir = word[i].dir;
+
+	len = monthword[i].len;
+	for (j = 0 ; j < len ; j++) {
+		if (dir == HOR) {
+			site = pos - offset + j;
+		} else {
+			site = pos - offset * W + j * W;
+		}
+
+		tpos = center + site;
+
+		assert(tpos >=0 && tpos < MAX_SIZE);
+
+		board_count[tpos]--;
+		if (board_count[tpos] == 0) {
+			board[tpos] = 0;
+		}
+
+		assert(board_count[tpos] >= 0);
+	}
+
+}
+
+
+/* 単語を盤面上に置いてみる
+ *
+ * no: 月番号
+ * area_size: 面積
+ *
+ * return 1: 置けた
+ *        0: 置けない
+ */
+int put_word_on_board(int no, int *area_size)
+{
+	int i, j, pos, offset, dir;
+	int len, site, tpos;
+	const int center = POS(20, 20);
+
+	i = no;
+
+	pos = word[i].pos;
+	offset = word[i].offset;
+	dir = word[i].dir;
+
+	len = monthword[i].len;
+	for (j = 0 ; j < len ; j++) {
+		if (dir == HOR) {
+			site = pos - offset + j;
+		} else {
+			site = pos - offset * W + j * W;
+		}
+
+		tpos = center + site;
+		if (board[tpos] > 0 &&
+			board[tpos] != monthword[i].name[j])
+			return 0;
+	}
+
+
+	for (j = 0 ; j < len ; j++) {
+		if (dir == HOR) {
+			site = pos - offset + j;
+		} else {
+			site = pos - offset * W + j * W;
+		}
+
+		tpos = center + site;
+
+		assert(tpos >=0 && tpos < MAX_SIZE);
+
+		board[tpos] = monthword[i].name[j];
+		board_count[tpos]++;
+
+		/* 面積を求めるため座標位置を計算 */
+		if (X(tpos) < gxmin) {
+			gxmin = X(tpos);
+		}
+		if (gxmax < X(tpos)) {
+			gxmax = X(tpos);
+		}
+		if (Y(tpos) < gymin) {
+			gymin = Y(tpos);
+		}
+		if (gymax < Y(tpos)) {
+			gymax = Y(tpos);
+		}
+
+	}
+
+	assert(gxmin > 0 && gxmax > 0 && gymin > 0 && gymax > 0);
+
+	*area_size = (gxmax - gxmin + 1) * (gymax - gymin + 1);
+
+/*	printf("%d-%d %d-%d\n", gxmin, gxmax, gymin, gymax); disp(board);*/
+
+	return 1;
+}
+
+
+#define AREA_CALC 1
+
+/* 再帰を使って、単語をつなげていく。*/
+void make_link(int n)
+{
+	int i, j, k, d;
+	int no, num, area;
+	char *ptr;
+
+#if AREA_CALC
+	int gxmin_bak, gxmax_bak, gymin_bak, gymax_bak;
+#endif
+
+	if (n >= MONTH_NUM) {
+		exit(1);
+
+		return;
+	}
+
+
+	/*
+	 * すでに配置した単語から枝を伸ばす
+	 */
+	for (i = 0 ; i < MONTH_NUM ; i++) {
+		if (use[i] == 0)
+			continue;
+
+		/* 単語を左から1文字ずつ取り出す */
+		for (j = 0 ; j < monthword[i].len ; j++) {
+			ptr = &(monthword[i].name[j]);
+
+			num = alpha_link[*ptr].num;
+
+			for (k = 0 ; k < num ; k++) {
+				no = alpha_link[*ptr].site[k].no;
+				if (use[no])
+					continue;
+
+				use[no] = 1;
+
+				if (word[i].dir == HOR) {
+					word[no].pos = word[i].pos - word[i].offset + j;
+				} else {
+					word[no].pos = word[i].pos - word[i].offset*W + j*W;
+				}
+				word[no].offset = alpha_link[*ptr].site[k].offset;
+
+				if (*(ptr + 1)) {  /* 最後の文字ではない */
+					/* 元の単語と反対方向にしか伸ばせられない */
+					word[no].dir = word[i].dir ^ 1;
+
+#if AREA_CALC
+					gxmin_bak = gxmin;
+					gxmax_bak = gxmax;
+					gymin_bak = gymin;
+					gymax_bak = gymax;
+#endif
+					if (put_word_on_board(no, &area)) {
+#if (!AREA_CALC)
+						area = get_area_size();
+#endif
+
+						if (area < min_area_size) {
+							if (n < MONTH_NUM - 1) {
+								make_link(n + 1);
+							} else {
+								assert(area < min_area_size);
+
+								min_area_size = area;  /* 最小面積更新 */
+
+/*								debug();*/
+								disp(board);
+								printf("すべての単語が置けた(面積 %d)\n", area);
+
+							}
+						}
+						unput_word_on_board(no);
+
+#if AREA_CALC
+						gxmin = gxmin_bak;
+						gxmax = gxmax_bak;
+						gymin = gymin_bak;
+						gymax = gymax_bak;
+#endif
+					}
+
+				} else {
+					/* 最後の文字から枝を伸ばす場合は、縦横いずれの
+					 * 方向にも付けられる。
+					 */
+					for (d = 0 ; d < 2; d++) {
+						word[no].dir = d;
+
+#if AREA_CALC
+						gxmin_bak = gxmin;
+						gxmax_bak = gxmax;
+						gymin_bak = gymin;
+						gymax_bak = gymax;
+#endif
+						if (put_word_on_board(no, &area)) {
+#if (!AREA_CALC)
+							area = get_area_size();
+#endif
+
+							if (area < min_area_size) {
+								if (n < MONTH_NUM - 1) {
+									make_link(n + 1);
+								} else {
+									assert(area < min_area_size);
+
+									min_area_size = area;  /* 最小面積更新 */
+
+/*									debug();*/
+									disp(board);
+									printf("すべての単語が置けた(面積 %d)\n", area);
+
+								}
+							}
+							unput_word_on_board(no);
+
+#if AREA_CALC
+							gxmin = gxmin_bak;
+							gxmax = gxmax_bak;
+							gymin = gymin_bak;
+							gymax = gymax_bak;
+#endif
+
+
+						}
+					}
+				}
+
+				use[no] = 0;
+			}
+		}
+	}
+
+}
+
+
+
+/* 初期化 */
+void init(void)
+{
+	int i, j, cnt;
+	char c;
+
+	for (i = 0 ; i < ELEM(alpha_link) ; i++) {
+		alpha_link[i].num = 0;
+	}
+
+	/* アルファベットのリンク状態を調べる */
+	for (i = 0 ; i < MONTH_NUM ; i++) {
+		use[i] = 0;
+
+		for (j = 0 ; j < monthword[i].len ; j++) {
+			c = monthword[i].name[j];  /* アルファベット1文字取り出す */
+
+			cnt = alpha_link[c].num;
+
+			assert(cnt < 100);
+			alpha_link[c].site[cnt].no = i;      /* 月番号 */
+			alpha_link[c].site[cnt].offset = j;  /* アルファベットの位置 */
+
+			alpha_link[c].num++;
+		}
+	}
+
+#if 0
+	for (i = 0 ; i < ELEM(alpha_link) ; i++) {
+		if (alpha_link[i].num > 0) {
+			printf("[%c] %d counts\n", i, alpha_link[i].num);
+
+			for (j = 0 ; j < alpha_link[i].num ; j++) {
+				printf("(%d,%d) ", alpha_link[i].site[j].no, alpha_link[i].site[j].offset);
+			}
+			printf("\n");
+		}
+	}
+#endif
+
+	init_board();
+
+	gxmax = 0;
+	gxmin = W;
+	gymax = 0;
+	gymin = H;
+}
+
+
+int main(void)
+{
+	clock_t tick = clock();
+	int area;
+
+	init();
+
+	/* JANUARYを横向きで置く */
+	use[0] = 1;
+	word[0].pos = 0;
+	word[0].offset = 0;
+	word[0].dir = HOR;
+	put_word_on_board(0, &area);
+
+	make_link(1);
+
+	use[0] = 0;
+
+
+    printf("time %.2f\n", (double)(clock() - tick) / CLOCKS_PER_SEC);
+	return 0;
+}
+
+

@@ -1,0 +1,192 @@
+/*'97/11/24,11/29-11/30
+ *Ｃマガジン '97/12月号『Ｃマガ電脳クラブ　第８１回』　
+ *　with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9712.C
+ *
+ *標題【ダイスインスタントインサニティー】
+ *
+ *Copyright (C)1997 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ *<e-mail>yutaka@timpani.seg.kobe-u.ac.jp
+ *<URL>http://www25.seg.kobe-u.ac.jp/yutaka/
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+/* 24通りのサイコロの置き方 */
+int pos[24][4] = {
+{1,2,3,4},{2,3,4,1},{3,4,1,2},{4,1,2,3},
+{1,4,3,2},{2,1,4,3},{3,2,1,4},{4,3,2,1},
+
+{0,1,5,3},{1,5,3,0},{5,3,0,1},{3,0,1,5},
+{0,3,5,1},{1,0,3,5},{5,1,0,3},{3,5,1,0},
+
+{0,2,5,4},{2,5,4,0},{5,4,0,2},{4,0,2,5},
+{0,4,5,2},{2,0,4,5},{5,2,0,4},{4,5,2,0},
+};
+
+int cube[30][6];    /* サイコロ */
+int bit[7];         /* ビットテーブル */
+int sel[6];         /* 30Ｃ6で選んだ6つのサイコロ(解) */
+int stage[4];       /* ４面の状態 */
+int ans[6];         /* 選んだサイコロの置き方(解) */
+int ansCnt,ansMin;  /* 解の数 */
+int view;           /* debug */
+
+/* サイコロの表示 */
+void dice(int d[])
+{
+	printf("  +-+\n");
+	printf("  |%d|\n",d[0]);
+	printf("+-+-+-+-+\n");
+	printf("|%d|%d|%d|%d|\n",d[1],d[2],d[3],d[4]);
+	printf("+-+-+-+-+\n");
+	printf("  |%d|\n",d[5]);
+	printf("  +-+\n");
+}
+
+void found(void)
+{
+	int i,j,k,n;
+
+	for(i = 0 ; i < 6 ; i++){
+		n = sel[i];
+		k = ans[i];
+		for(j = 0 ;j < 4 ;j++){
+			printf("|%d|",cube[n][ pos[k][j] ]);
+		}
+		putchar('\n');
+	}
+	putchar('\n');
+}
+
+/* ｎ番目のサイコロを再帰的に置いていき探索。*/
+int putCube(int n)
+{
+	int i,j,k,d,dn;
+
+	if(n >= 6){
+		/*if(view) found();*/
+		ansCnt++;
+		if(ansCnt >= ansMin) return 1;   /* 枝刈 */
+		return 0;
+	}
+
+	dn = sel[n];
+	for(i = 0 ; i < 24 ; i++){    /* 24通りの置き方を試す */
+		for(j = 0 ;j < 4 ; j++){
+			d = cube[ dn ][ pos[i][j] ];
+			if(stage[j] & bit[d]) break;
+			stage[j] |= bit[d];
+		}
+		if(j == 4){
+			ans[n] = i;
+			if(putCube(n + 1) == 1) return 1;
+			ans[n] = 0;
+		}
+		for(k = j-1 ; k >= 0 ;k--){
+			d = cube[ dn ][ pos[i][k] ];
+			stage[k] &= ~bit[d];
+		}
+	}
+	return 0;
+}
+
+/* サイコロを30個生成 */
+void makeDice(void)
+{
+	int i,cnt,use[7],v[5];
+
+	cnt = 0;
+	for(v[4]= 2 ; v[4] <= 6 ; v[4]++){
+		memset(use,0,sizeof(use));
+		use[v[4]] = 1;
+		for(i = 2 ; i <= 6 ; i++)
+			if(use[i] == 0){
+				use[i] = 1;
+				v[0] = i;
+				break;
+			}
+		for(v[1] = 2 ; v[1] <= 6 ; v[1]++){
+			if(use[v[1]]) continue;
+			use[v[1]] = 1;
+
+			for(v[2] = 2 ; v[2] <= 6 ; v[2]++){
+				if(use[v[2]]) continue;
+				use[v[2]] = 1;
+
+				for(v[3] = 2 ; v[3] <= 6 ; v[3]++){
+					if(use[v[3]]) continue;
+					if(cnt >= 30){
+						puts("ERR"); exit(1);
+					}
+					/* サイコロデータ保存 */
+					cube[cnt][0] = 1;
+					for(i = 1 ; i <= 5 ; i++){
+						cube[cnt][i] = v[i-1];
+					}
+					/*dice(cube[cnt]);*/
+
+					cnt++;
+				}
+				use[v[2]] = 0;
+			}
+			use[v[1]] = 0;
+		}
+		use[v[4]] = 0;
+	}
+}
+
+int main(void)
+{
+	int n,i,j,d,cnt,ret;
+	long k = 0L,t,t2;
+
+	t = time(NULL);
+	puts("C Magazine Puzzle");
+	makeDice();
+	for(n = 1; n <= 6 ; n++) bit[n] = 1 << (n-1);
+	ansMin = 9999;       /* 解の最小値 */
+
+	for(sel[0] = 0        ; sel[0] < 25 ; sel[0]++)
+	for(sel[1] = sel[0]+1 ; sel[1] < 26 ; sel[1]++)
+	for(sel[2] = sel[1]+1 ; sel[2] < 27 ; sel[2]++)
+	for(sel[3] = sel[2]+1 ; sel[3] < 28 ; sel[3]++)
+	for(sel[4] = sel[3]+1 ; sel[4] < 29 ; sel[4]++)
+	for(sel[5] = sel[4]+1 ; sel[5] < 30 ; sel[5]++){
+		k++;
+		/*
+		if(k == 912){
+			view = 1;
+			dice(cube[sel[0]]);dice(cube[sel[1]]);dice(cube[sel[2]]);
+			dice(cube[sel[3]]);dice(cube[sel[4]]);dice(cube[sel[5]]);
+		}else view = 0;
+		 */
+		n = sel[0];  /* 1つ目のサイコロ */
+		cnt = 0;
+		for(i = 0 ; i < 3 ; i++){ /* １つ目は3通りの置き方のみ */
+			ansCnt = 0;
+			for(j = 0 ; j < 4 ; j++){
+				d = cube[ n ][ pos[i*8][j] ];
+				stage[j] = 0;
+				stage[j] |= bit[d];
+			}
+			ans[0] = i*8;
+			if(putCube(1) == 1) break;
+			cnt += ansCnt;
+		}
+		if(i == 3 && cnt > 0 && cnt < ansMin){
+			printf("記録更新(%ld):最小値 %d => %d\n",k,ansMin,cnt);
+			ansMin = cnt;
+			if(ansCnt == 1) goto END;
+		}
+	}
+END:;
+	t2 = time(NULL) - t;
+	printf("実行時間: %ld 分 %ld 秒\n",t2/60,t2%60);
+
+	return 0;
+}

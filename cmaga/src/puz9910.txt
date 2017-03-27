@@ -1,0 +1,169 @@
+/*1999/9/23 - 9/26
+ *
+ *puz9910.c  with gcc 2.7.2.3(VineLinux 1.0)
+ *CMAGAZINE 1999/10 No.103[楊貴妃問題]
+ *
+ *Copyright (C)1995-1999 平田豊
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+typedef struct {  /* 水の状態パターン */ 
+	long num;      /* 3容器の水の量（6桁で表現）*/
+	long prev[10]; /* 移す1つ前の水の状態 */
+	int prevcnt;   /* prev[]の数 */
+} Water;
+
+Water water[100][5];  /* water[移し変え数][水の状態数] */
+int water_cnt[100];
+
+int answer_flag;
+int maxstep;          /* 解の移し替え回数 */
+
+long record[100];
+int anscnt;           /* (88,0,0)→(79,0,9)までの過程の個数 */
+
+void debug(void)
+{
+	int j;
+
+	for (j = 0; j <= maxstep - 1 ; j++) {
+		printf("(%2d,%2d,%2d) → ", 
+			record[j]/10000, (record[j]/100)%100, record[j]%100);
+		if (j % 4 == 0) printf("\n");
+	}
+
+	printf("(%2d,%2d,%2d)\n", 
+	record[maxstep]/10000, (record[maxstep]/100)%100, record[maxstep]%100);
+}
+
+/* 解の過程の表示 */
+void show(int step, long num)
+{
+	int i, pos;
+	long prev;
+
+	if (step == 0) {
+		debug();
+		anscnt++;
+		return;
+	}
+
+	for (i = 0 ; i < water_cnt[step]; i++) {
+		if (water[step][i].num == num) {
+			pos = i;
+			break;
+		}
+	}
+
+	record[step] = num;
+	for (i = 0 ; i < water[step][pos].prevcnt; i++) {
+		prev = water[step][pos].prev[i];
+		record[step-1] = prev;
+		show(step - 1, prev);
+	}
+}
+
+/* 同じ水の状態がすでに出現していないかを調べる */
+int check(int step, long new)
+{
+	int i, j, cnt;
+	
+	for (i = 0 ; i <= step ; i++) {
+		cnt = water_cnt[i];
+		for (j = 0 ; j < cnt ; j++) {
+			if (water[i][j].num == new) {
+				if (i == step) 
+					return (j + 100);  /* prevの登録は行う */
+				else 
+					return 1;  /* すでに状態が存在する */
+			}
+		}
+	}
+	return 0;   /* 新しいパターン */
+}
+
+/* 水の状態(num)に対して移し替えを行う */
+void waterMove(long num, int step)
+{
+    static int max[3] = {88, 49, 18};
+    static int other[3][2] = {
+    	{1,2}, {0,2}, {0,1}
+    };
+    int i, j, k, t, move, prevcnt, ret, n[3], w[3];
+	long new;
+
+    w[0] = num / 10000;
+	w[1] = (num/100)%100;
+	w[2] = num % 100;
+
+    for (i = 0 ; i < 3 ; i++) {    /* 左、中、右の容器の順に */
+    	if (w[i] == 0) continue;
+    	for (j = 0 ; j < 2 ; j++) {  /* 残り2つの容器へ移し替えを試みる */
+        	t = other[i][j];
+            if (w[i] + w[t] <= max[t])
+            	move = w[i];
+            else
+            	move = max[t] - w[t];
+
+            n[i] = w[i] - move;
+            n[t] = w[t] + move;
+            k = other[i][j ^ 1];
+            n[k] = w[k];
+			new = n[0]*10000 + n[1]*100 + n[2];
+            
+			ret = check(step, new);
+			
+			if (ret >= 100) {  
+				/* すでに生成された状態だが prev[] への登録は行う */
+				prevcnt = water[step][ret-100].prevcnt;
+            	water[step][ret-100].prev[prevcnt] = num;
+				water[step][ret-100].prevcnt++;
+			} 
+            if (ret == 0) {
+				/* 新しい状態なので登録を行う */
+            	water[step][water_cnt[step]].num = new;
+
+				prevcnt = water[step][water_cnt[step]].prevcnt;
+            	water[step][water_cnt[step]].prev[prevcnt] = num;
+				water[step][water_cnt[step]].prevcnt++;
+
+            	water_cnt[step]++;
+
+                if (n[0] == 79 && n[2] == 9) { /* 解 */
+                    printf("解：%d回目\n", step);
+					answer_flag = 1;
+					maxstep = step;
+                }
+            }
+        }
+    }
+}
+
+int main(void)
+{
+	clock_t t = clock();
+    int step, n, cnt;
+
+	water[0][0].num = 880000;
+	water[0][0].prevcnt = 0;
+    water_cnt[0] = 1;
+
+	for (step = 1 ; step <= 100 ; step++) { /* 水の移し替え回数 */
+    	cnt = water_cnt[step-1];
+        for (n = 0 ; n < cnt ; n++) {
+			waterMove(water[step-1][n].num, step);
+        }
+		if (answer_flag == 1) break;
+    }
+
+	show(maxstep, 790009);
+	
+	printf("過程は %d とおり\n", anscnt);
+    
+    printf("time %f\n", (clock() - t) / CLK_TCK);
+	return 0;
+}
+

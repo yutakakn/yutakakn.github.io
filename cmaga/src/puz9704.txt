@@ -1,0 +1,214 @@
+/*'97/3/21 - 3/24
+ *Ｃマガジン '97/4月号『Ｃマガ電脳クラブ　第７３回』　
+ *　with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9704.C
+ *
+ *標題【素数魔方陣】
+ *
+ *Copyright (C) 1995-1997 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ *<E-mail>t9425088@jube.csedu.kobe-u.ac.jp
+ */
+#include <stdio.h>
+#include <string.h>
+
+char *rcsIdentPuz9704 =
+"$ID: puz9704.c 1997/3/21 21:06:08 (C)Yutaka Hirata $";
+
+#define D(c) printf(#c,"=%d\n",c)
+
+#define MAX 1000    /* 最大定和 */
+
+int prime[ MAX / 3 ];   /* 素数 */
+int prime_cnt;      /* 素数の個数 */
+
+int isprime[ MAX + 1 ]; /* 素数判別テーブル */
+
+int ok[ MAX + 1 ];  /* 素数使用チェック用テーブル */
+
+/*　魔方陣の配置
+ *  a | b | c
+ * ---+---+---
+ *  d | e | f
+ * ---+---+---
+ *  g | h | i
+ * ---+---+---
+ */
+int a,b,c,d,e,f,g,h,i;  /* 9つのマスの素数値 */
+int at,ct,gt;           /* 検索は3マスのみ */
+int sum;                /* 調べる定和 */
+
+int ans[2][9];          /* 解答バッファ */
+int ans_cnt;            /* 解答の個数 */
+
+/* 解答の表示 */
+void disp(void)
+{
+	int i,j;
+
+	for(i = 0 ; i < 2 ; i++){
+		for(j = 0 ; j < 9 ; j++){
+			printf("%d| ",ans[i][j]);
+			if(j == 2 || j == 5 || j == 8) putchar('\n');
+		}
+		putchar('\n');
+	}
+}
+
+/* 解が見つかったときの処理 */
+void found(void)
+{
+	if(ans_cnt < 2){
+		ans[ans_cnt][0] = a;
+		ans[ans_cnt][1] = b;
+		ans[ans_cnt][2] = c;
+		ans[ans_cnt][3] = d;
+		ans[ans_cnt][4] = e;
+		ans[ans_cnt][5] = f;
+		ans[ans_cnt][6] = g;
+		ans[ans_cnt][7] = h;
+		ans[ans_cnt][8] = i;
+	}
+	ans_cnt++;
+}
+
+/* 第2検索処理 */
+void sub2(void)
+{
+	int p,p2,p3,p4,p5,s;
+
+	/* ここではマスｇを検索。残りはすべて定和からの引算で求める */
+	for(gt = ct + 1 ; gt <= prime_cnt ; gt++){
+		if(ok[gt]) continue;
+		g = prime[gt];
+		if(g >= sum) break;
+		ok[gt] = 1;
+		/*検索順は g -> e -> d -> i -> f -> h*/
+		e = sum - c - g;
+		if(e < 0) break;
+		if( !(p = isprime[e])>0 && !ok[p]){
+			ok[gt] = 0; continue;
+		}
+		ok[p] = 1;
+
+		d = sum - a - g;
+		if(d < 0){
+			ok[p] = 0;
+			break;
+		}
+		if( !(p2 = isprime[d])>0 && !ok[p2]){
+			ok[gt] = ok[p] = 0; continue;
+		}
+		ok[p2] = 1;
+
+		i = sum - a - e;
+		if(i < 0){
+			ok[p] = ok[p2] = 0;
+			break;
+		}
+		if( !(p3 = isprime[i])>0 && !ok[p3]){
+			ok[gt] = ok[p] = ok[p2] = 0; continue;
+		}
+		ok[p3] = 1;
+
+		f = sum - c - i;
+		if(f < 0){
+			ok[p] = ok[p2] = ok[p3] = 0;
+			break;
+		}
+		if( !(p4 = isprime[f])>0 && !ok[p4]){
+			ok[gt] = ok[p] = ok[p2] = ok[p3] = 0; continue;
+		}
+		ok[p4] = 1;
+
+		h = sum - g - i;
+		if(h < 0){
+			ok[gt] = ok[p] = ok[p2] = ok[p3] = ok[p4] = 0;
+			break;
+		}
+		if( (p5 = isprime[h])>0 && !ok[p5]){
+			/* 最後にマスb+e+hとd+e+fがsumかどうか調べる */
+			s = b + e + h;
+			if(s == sum){
+				s = d + e + f;
+				if(s == sum) found();
+			}
+		}
+
+		ok[gt] = ok[p] = ok[p2] = ok[p3] = ok[p4] = 0;
+	}
+	ok[gt] = 0;
+}
+
+/* 検索メイン処理 */
+void sub(void)
+{
+	int p;
+
+	memset(ok,0,sizeof(ok));  /* 0:未使用 1:使用中 */
+
+	for(sum = 31 ; sum <= MAX ; sum += 2){ /* 定和が奇数のみ調べる */
+		ans_cnt = 0;
+		/* 検索順は a -> c -> b */
+		for(at = 1 ; at <= prime_cnt ; at++){
+			if(ok[at]) continue;  /*すでに使用済みならスキップ*/
+			a = prime[at];
+			if(a >= sum) break;   /*定和を超えてもスキップ*/
+			ok[at] = 1;           /*使用中のマーク*/
+
+			for(ct = at + 1 ; ct <= prime_cnt ; ct++){
+				if(ok[ct]) continue;
+				c = prime[ct];
+				if(c >= sum) break;
+				b = sum - a - c;  /*引算でマスｂを求める*/
+				if(b < 0) break;
+				ok[ct] = 1;
+				/* マスｂが素数で、かつ未使用ならｏｋ */
+				if( (p = isprime[b]) > 0 && !ok[p]){
+					ok[p] = 1;
+					sub2();     /* 次の処理へ */
+					ok[p] = 0;
+				}
+				ok[ct] = 0;
+			}
+			ok[at] = 0;
+		}
+
+		if(ans_cnt == 2){
+			printf("定和 %d の解は %d 個\n",sum,ans_cnt); disp();
+			break;
+		}
+	}
+}
+
+/* エラトステネスの篩を使って素数を求めます */
+void get_prime(void)
+{
+	int i,j;
+	static char s[ MAX + 1 ];
+
+	memset(s,0,sizeof(s));
+
+	/* prime[0]は使わない */
+	prime_cnt = 1;
+	for(i = 3 ; i <= MAX ; i += 2){    /* '2'は除いておく */
+		if(s[i] == 0){
+			isprime[ i ] = prime_cnt;
+			prime[prime_cnt] = i;
+			prime_cnt++;
+			for(j = i + i ; j <= MAX ; j += i)
+				s[j] = 1;
+		}
+	}
+}
+
+int main(void)
+{
+	puts("Ｃマガジン '97/4月号『Ｃマガ電脳クラブ　第７３回』");
+
+	get_prime();
+	sub();
+
+	return 0;
+}

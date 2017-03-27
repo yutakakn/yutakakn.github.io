@@ -1,0 +1,257 @@
+/* 2002/3/6 - 3/17
+ *
+ * puz0203.c    with Visual C++ 6.0(Windows2000)
+ *
+ * CMAGAZINE 2002/03 No.132[Ｉトロミノ]
+ *
+ * Copyright (C)1996-2002 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+#include <assert.h>
+
+
+/*
+ * データ定義
+ */
+
+/* 盤の大きさ */
+#define OW 8
+#define OH 12
+#define W (OW + 1)
+#define H (OH + 1)
+#define SIZE (W * H)
+
+#define EMPTY '\0'
+#define WALL 'w'
+
+#define POS(x,y) ((x) + (y)*W)
+#define CHR(n) (n + 'A')
+
+
+int board[SIZE];   /* 盤面(長方形) */
+
+
+#define REC_MAX 100
+int record[REC_MAX][SIZE];  /* 解記録用テーブル */
+int anscnt = 0;             /* 解の個数 */
+
+
+/*
+ * 関数定義
+ */
+
+
+/* 盤面の表示 */
+void show(int *board)
+{
+	int x, y, c;
+
+	for (y = 0 ; y < H-1 ; y++) {
+		for (x = 0 ; x < W-1 ; x++) {
+			c = board[POS(x,y)];
+			if (c == 0)
+				c = ' ';
+			printf("%c", c);
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+
+
+/* 2つの盤面(シルエット)が同一かどうか調べる */
+int is_same(int *boardA, int *boardB)
+{
+	int i, c, pos[3], np;
+
+	for (c = 0 ; c < 32; c++) {
+
+		np = 0;
+		for (i = 0 ; i < SIZE ; i++) {
+			if (boardA[i] == CHR(c)) {
+				assert(np < 3);
+				pos[np++] = i;
+			}
+		}
+
+		if (!(boardB[pos[0]] == boardB[pos[1]] &&
+			boardB[pos[1]] == boardB[pos[2]]))
+			return 0;  /* 違う */
+
+	}
+
+	return 1;   /* 同じ */
+}
+
+/* 盤面(new)がすでに登場済みのものと同一でないかを
+ * 回転鏡像解を含めて調べる。
+ */
+int check_same_board(int *new)
+{
+	int tmp[SIZE];
+	int i, x, y;
+
+	for (i = 0 ; i < anscnt ; i++) {
+		/* そのまま */
+		if (is_same(record[i], new))
+			return 0;
+
+		/* 左右反転 */
+		for (y = 0 ; y < H-1 ; y++) {
+			for (x = 0 ; x < W-1 ; x++) {
+				tmp[POS(OW-1-x,y)] = new[POS(x,y)];
+			}
+		}
+		if (is_same(record[i], tmp))
+			return 0;
+
+		/* 上下反転 */
+		for (y = 0 ; y < H-1 ; y++) {
+			for (x = 0 ; x < W-1 ; x++) {
+				tmp[POS(x,OH-1-y)] = new[POS(x,y)];
+			}
+		}
+		if (is_same(record[i], tmp))
+			return 0;
+
+		/* 対角 */
+		for (y = 0 ; y < H-1 ; y++) {
+			for (x = 0 ; x < W-1 ; x++) {
+				tmp[POS(OW-1-x,OH-1-y)] = new[POS(x,y)];
+			}
+		}
+		if (is_same(record[i], tmp))
+			return 0;
+	}
+
+	return 1;  /* 登録可能 */
+}
+
+
+/* 十字型の継ぎ目チェック */
+int is_cross_link(int site)
+{
+	int c[4];
+
+	if (site < POS(1,1))
+		return 0;
+
+	/*
+	 +-+-+
+	 |0|1|
+     +-+-+
+	 |2|3|  3 = site
+     +-+-+
+	*/
+
+	c[3] = site;
+	c[2] = c[3] - 1;
+	c[1] = c[3] - W;
+	c[0] = c[1] - 1;
+
+	/* 4箇所すべて異なっていれば十字型の継ぎ目 */
+	if (board[c[0]] != board[c[1]] && board[c[0]] != board[c[2]] &&
+		board[c[3]] != board[c[1]] && board[c[3]] != board[c[2]])
+		return 1;
+
+	return 0;
+}
+
+
+/* バックトラックによる検索処理
+ *
+ * count: 置いたピース(Iトロミノ)の数
+ * site : ピースを置くべき位置
+ */
+void sub(int count, int site)
+{
+	static int dir[2][2] = {
+		{1, 2},    /* 横向き */
+		{W, 2*W},  /* 縦向き */
+	};
+	int n, i, d1, d2;
+
+	if (count >= 32) {
+		if (check_same_board(board)) {
+			/* 解の登録 */
+			for (i = 0 ; i < SIZE ; i++) {
+				record[anscnt][i] = board[i];
+			}
+			anscnt++;
+
+			printf("No. %d\n", anscnt);
+			show(board);
+		}
+
+		return;
+	}
+
+	/* 空マスを探す */
+	n = site;
+	while (board[n++] != 0)
+		;
+	n--;
+
+	if (n >= POS(W-1,H-1))
+		return;
+
+	/* ピース(Iトロミノ)を置いてみる */
+	for (i = 0 ; i < 2 ; i++) {
+		d1 = dir[i][0];
+		d2 = dir[i][1];
+
+		if (board[n + d1] == 0 && board[n + d2] == 0) {
+
+			board[n] = CHR(count);
+
+			if (!is_cross_link(n)) {
+				board[n + d1] = board[n + d2] = CHR(count);
+
+				sub(count + 1, n);
+
+				board[n + d1] = board[n + d2] = 0;
+
+			}
+
+			board[n] = 0;
+		}
+	}
+}
+
+
+/* データの初期化 */
+void init(void)
+{
+	int x, y;
+
+	for (y = 0 ; y < H ; y++) {
+		for (x = 0 ; x < W ; x++) {
+			if (x == W - 1 || y == H - 1) {
+				board[POS(x,y)] = WALL;
+			} else {
+				board[POS(x,y)] = 0;
+			}
+		}
+	}
+	board[POS(W-1,H-1)] = 0;  /* 番兵 */
+}
+
+
+int main(void)
+{
+	clock_t tick = clock();
+
+	init();
+	sub(0, 0);
+
+    printf("time %.2f\n", (double)(clock() - tick) / CLOCKS_PER_SEC);
+	return 0;
+}
+
+

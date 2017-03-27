@@ -1,0 +1,260 @@
+/* 2001/1/1 - 1/2
+ *
+ * puz0101.c    with gcc 2.95.2(TurboLinux Workstation 6.0)
+ * CMAGAZINE 2001/1 No.118[等しく分かれた立方体]
+ *
+ * Copyright (C)1996-2001 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define DEBUG 0
+
+#define SSIZE 3            /* 立方体の大きさ */
+#define MAX (SSIZE*SSIZE*SSIZE)
+#define SIZE (SSIZE + 1)   
+#define POS(x, y, z) ((x) + (y)*SIZE + (z)*(SIZE*SIZE))
+
+/* 一つの塊が持つ属性の和 */
+#define SUM ((1 + SSIZE*SSIZE*SSIZE)*(SSIZE*SSIZE*SSIZE)/4)
+
+/* 立方体のピースの種類(空、塊、壁) */
+enum {
+	EMPTY=0, AX, WALL
+};
+
+int box[SIZE * SIZE * SIZE];   /* 立方体 */
+int ans_count = 0;             /* 解の個数 */
+int comb[MAX];                 /* 和がSUMとなるピースの組合せ */
+
+/* 番号(1-27)に対応する立方体のオフセット値 */
+int postable[MAX] = {
+	POS(0,0,0), POS(1,0,0), POS(2,0,0),
+	POS(0,1,0), POS(1,1,0), POS(2,1,0),
+	POS(0,2,0), POS(1,2,0), POS(2,2,0),
+
+	POS(0,0,1), POS(1,0,1), POS(2,0,1),
+	POS(0,1,1), POS(1,1,1), POS(2,1,1),
+	POS(0,2,1), POS(1,2,1), POS(2,2,1),
+
+	POS(0,0,2), POS(1,0,2), POS(2,0,2),
+	POS(0,1,2), POS(1,1,2), POS(2,1,2),
+	POS(0,2,2), POS(1,2,2), POS(2,2,2),
+};
+
+
+void box_disp(int *box)
+{
+	int x, y, z, c;
+	char *msg[] = {
+		"□", "■",
+	};
+
+	printf("上段     中段     下段\n");
+	for (y = 0 ; y < SIZE-1 ; y++) {
+		for (z = 0 ; z < SIZE-1 ; z++) {
+			for (x = 0 ; x < SIZE-1 ; x++) {
+				c = box[POS(x,y,z)];
+				printf("%s", msg[c]);
+			}
+			printf("   ");
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+
+
+/* 立方体を初期化 */
+void init(int *box)
+{
+	int x, y, z;
+
+	for (z = 0 ; z < SIZE ; z++) {
+		for (x = 0 ; x < SIZE ; x++) {
+			for (y = 0 ; y < SIZE ; y++) {
+				if (x == SIZE-1 || y == SIZE-1 || z == SIZE-1) {
+					box[POS(x,y,z)] = WALL;
+				} else {
+					box[POS(x,y,z)] = 0;
+				}
+			}
+		}
+	}
+}
+
+/* 解の表示 */
+void found(int *box, int box_cnt)
+{
+	static int cube[SIZE*SIZE*SIZE];
+	int i;
+
+	init(cube);
+	for (i = 0 ; i < box_cnt ; i++) {
+		cube[postable[box[i]-1]] = AX;
+	}
+	box_disp(cube);
+}
+
+/* 最初に与えられたposからたどれるところまでピースをたどり、
+ * そのピースの個数をカウントする。
+ * 個数が足りない場合は面でくっついていない箇所がある。
+ */
+void search(int *cube, int pos, int *max, int kind)
+{
+	static int dirs[6] = {-SIZE*SIZE, SIZE*SIZE, -1, 1, -SIZE, SIZE};
+	int d, site;
+
+	for (d = 0 ; d < 6 ; d++) {
+		site = pos + dirs[d];
+		if (site >= 0 && site < SIZE*SIZE*SIZE)
+			if (cube[site] == kind) {
+				cube[site] = WALL;
+				(*max)++;
+
+				search(cube, site, max, kind);
+			}
+	}
+}
+
+/* 塊が6方向のいずれかに平行移動できるかを調べる。*/
+int check_splice(int *box)
+{
+	static int dirs[6][3] = {
+	/*     前      後ろ      左       右       上      下  */
+		{0,-1,0},{0,1,0}, {-1,0,0},{1,0,0}, {0,0,-1},{0,0,1},
+	};
+	int d, x, y, z, c;
+	int sx, sy, sz;
+
+	for (d = 0 ; d < 6 ; d++) {
+
+		for (z = 0 ; z < SSIZE ; z++) {
+			for (y = 0 ; y < SSIZE ; y++) {
+				for (x = 0 ; x < SSIZE ; x++) {
+					c = box[POS(x,y,z)];
+					if (c != AX) 
+						continue;
+
+					sx = x + dirs[d][0];
+					sy = y + dirs[d][1];
+					sz = z + dirs[d][2];
+					if (!(sx >= 0 && sx < SSIZE &&
+						sy >= 0 && sy < SSIZE &&
+						sz >= 0 && sz < SSIZE)) 
+						continue;
+
+					if (box[POS(sx,sy,sz)] == AX)
+						continue;
+
+					/* ここまで来ると平行移動は無理 */
+					goto SKIP;
+				}
+			}
+		}
+
+		return (d + 1);
+
+	SKIP:;
+	}
+
+	return 0;
+}
+
+/* 立方体が面同士でくっついており、平行移動できるか調べる。*/
+int check_cube(int *box, int box_cnt)
+{
+	static int cube[SIZE*SIZE*SIZE];
+	int i, st, cnt, ret;
+
+	init(cube);
+
+	for (i = 0 ; i < box_cnt ; i++) {
+		cube[postable[box[i]-1]] = AX;
+	}
+	/* 平行移動のチェック */
+	ret = check_splice(cube);
+	if (ret == 0)
+		return 0;
+
+	/* 立方体の連結チェック */
+	cnt = 1;
+	cube[0] = WALL;
+	search(cube, 0, &cnt, AX);
+	if (cnt != box_cnt)
+		return 0;
+
+	/* 立方体(other)の連結チェック */
+	for (i = 0 ; i < box_cnt ; i++) {
+		cube[postable[box[i]-1]] = AX;
+	}
+	cnt = 1;
+	st = -1;
+	for (i = 0 ; i < SIZE*SIZE*SIZE; i++) {
+		if (cube[i] == 0) {
+			st = i;
+			break;
+		}
+	}
+	if (st == -1)
+		exit(1);
+	cube[st] = WALL;
+	search(cube, st, &cnt, 0);
+	if (cnt != MAX - box_cnt) 
+		return 0;
+
+	return 1;
+}
+
+/*
+ * 和がSUMとなる番号の組合せを求める。
+ *   n:番号の個数 sum:和 prev:直前の番号
+ */
+void make_comb(int n, int sum, int prev)
+{
+	int i, ret;
+
+	if (sum > SUM)
+		return;
+
+	if (sum == SUM) {
+		/* 塊の正当性チェック */
+		ret = check_cube(comb, n);
+		if (ret == 1) {
+			ans_count++;
+
+		#if DEBUG
+			printf("No.%d\n", ans_count);
+
+			for (i = 0 ; i < n-1 ; i++)
+				printf("%d + ", comb[i]);
+			printf("%d = %d\n", comb[n-1], SUM);
+
+			found(comb, n);
+		#endif
+		}
+		return;
+	}
+
+	for (i = prev + 1 ; i <= MAX ; i++) {
+		comb[n] = i;
+		make_comb(n + 1, sum + i, i);
+	}
+} 
+
+int main(void)
+{
+	clock_t t = clock();
+
+	comb[0] = 1;        /* 番号 1 から始める */
+	make_comb(1, 1, 1); 
+
+	printf("%d とおり\n", ans_count);
+	
+    printf("time %.2f\n", (double)((clock() - t) / CLOCKS_PER_SEC));
+	return 0;
+}
+

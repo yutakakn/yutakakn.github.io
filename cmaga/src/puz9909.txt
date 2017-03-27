@@ -1,0 +1,120 @@
+/*'99/8/22
+ *
+ *puz9909.c  with C++Builder4(Windows95)
+ *CMAGAZINE 1999/9 No.102[平方小町式]
+ *
+ *Copyright (C)1995-1999 平田豊
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+typedef struct {
+    int org;     /* 元の数 */
+	long n;      /* 平方数 */
+	int bit;     /* 構成数のビットフラグ */
+	int keta;    /* 桁数 */
+} two_t;
+two_t two[3700]; /* 検索に使用する平方数 */
+int two_cnt;
+
+int bit[10];  /* ビットフラグ */
+int lefts;    /* 左辺の構成要素数 */
+
+int record[10];
+int rec_cnt;
+
+void found(int right)
+{
+	int i;
+
+	for (i = 0 ; i < rec_cnt-1 ; i++) {
+		printf("%d^2 + ", record[i]);
+	}
+	printf("%d^2 = %d^2\n", record[rec_cnt-1], right);
+}
+
+void sub(int prev, int numbers, long sum, int bits)
+{
+	int i, j, lf;
+
+	for (i = prev; i < two_cnt ; i++) {
+        /* 左辺は右辺より大きな平方数は使えない */
+        if (two[i].keta > 9-lefts) break;
+		if (bits & two[i].bit) continue;
+		if (numbers + two[i].keta > lefts) break;
+		numbers += two[i].keta;
+		sum += two[i].n;
+		bits |= two[i].bit;
+
+        record[rec_cnt++] = two[i].org;
+
+		if (numbers == lefts) {
+			lf = 9 - numbers;
+			for (j = 0 ; j < two_cnt ; j++) {
+				if (two[j].keta > lf) break;
+				if (two[j].keta == lf) {
+					if ((two[j].bit & bits) == 0 && sum == two[j].n) { /* 解 */
+						found(two[j].org);
+					}
+				}
+			}
+		} else {
+			sub(i + 1, numbers, sum, bits);
+		}
+
+		record[--rec_cnt] = 0;
+		numbers -= two[i].keta;
+		sum -= two[i].n;
+		bits &= ~two[i].bit;
+	}
+}
+
+void init(void)
+{
+	int i, j, k, n, c, bits;
+
+	for (i = 1 ; i <= 9 ; i++) {
+		bit[i] = 1 << (i-1);
+	}
+
+	two_cnt = 0;
+	for (i = 1 ; i <= 9876 ; i++) {
+		k = 0;
+		n = i;
+		bits = 0;
+		for (j = 1000 ; j >= 1 ; j /= 10) {
+			if (i < j) continue;
+			c = n / j;
+			if (c == 0) break;
+			if (bits & bit[c]) break;
+			bits |= bit[c];
+			n %= j;
+			k++;
+		}
+		if (j == 0) {
+			two[two_cnt].org = i;
+			two[two_cnt].n = (long)i * i;
+			two[two_cnt].bit = bits;
+			two[two_cnt].keta = k;
+			two_cnt++;
+		}
+	}
+}
+
+int main(void)
+{
+	time_t s = time(NULL);
+
+	init();
+	for (lefts = 5 ; lefts <= 7 ; lefts++) {
+        printf("左の要素数 %d\n", lefts);
+		sub(0,0,0,0);
+	}
+
+	s = time(NULL) - s;
+	printf("実行時間 %ld : %ld : %ld\n",(s/60)/60, (s/60)%60 , s % 60);
+	return 0;
+}
+

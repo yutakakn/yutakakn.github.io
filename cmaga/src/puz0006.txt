@@ -1,0 +1,120 @@
+/* 2000/5/30 - 5/31
+ *
+ * puz0006.c    with Borland C++Compiler5.5
+ * CMAGAZINE 2000/6 No.111[zŠÂ‚·‚é”—ñ]
+ *
+ * Copyright (C)1996-2000 •½“c–L
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define REC_MAX 100
+
+/* zŠÂ”‚Ì‹L˜^ */
+int record[REC_MAX];
+int rec_cnt;
+
+void disp(void)
+{
+	int i;
+	
+	for (i = 0 ; i < rec_cnt-1 ; i++) {
+		printf("%d, ", record[i]);
+	}
+	printf("%d  :", record[rec_cnt-1]);
+	printf("%d ŒÂ‚ÅzŠÂ\n", rec_cnt);
+}
+
+int samecheck(int num)
+{
+	int i;
+	
+	for (i = 0 ; i < rec_cnt ; i++) {
+		if (record[i] == num) return 1;
+	}
+	return 0;
+}
+
+void sort(char buf[], int len)
+{
+	int i, j;
+	char t;
+	
+	for (i = 0 ; i < len ; i++) {
+		for (j = len - 1 ; j > i ; j--) {
+			if (buf[j-1] < buf[j]) {
+				t = buf[j];
+				buf[j] = buf[j-1];
+				buf[j-1] = t;
+			}
+		}
+	}
+}
+
+/* ®”num‚ğ~‡‚É•À‚×‘Ö‚¦‚é */
+int func(int num)
+{
+	static char buf[32];
+	int len;
+	
+	len = sprintf(buf, "%d", num);
+	sort(buf, len);
+	return (atoi(buf));
+}
+
+int sub(int min, int max)
+{
+	int a0, a, an, count;
+	
+	for (a0 = min; a0 <= max; a0++) { /* ‰€ */
+		if (a0 % 10 == 0) continue;
+	
+		rec_cnt = 0;
+		record[rec_cnt++] = a0;
+		
+		a = a0;
+		/* zŠÂ‚·‚é‚Ü‚Å’T‚· */
+		for (count = 1 ; ; count++) {
+			an = func(a) - a;
+			
+			if (an < min) { /* Œ…—‚¿‚·‚é‚ÆzŠÂ‚µ‚È‚¢ */
+				break;
+			}
+			
+			if (an == a0) { /* zŠÂ‚µ‚½ */
+				if (count >= 10) {  /* ğŒ‚ğ–‚½‚µ‚Ä‚¢‚ê‚Î‰ğ */
+					disp();
+					return 1;
+				}
+				break;
+			}
+
+			if (samecheck(an)) { /* “¯‚¶”‚ª‚·‚Å‚ÉoŒ»‚µ‚Ä‚¢‚é */
+				break;
+			}
+
+			record[rec_cnt++] = an;
+			a = an;
+		}
+		
+	}
+	return 0;
+}
+
+int main(void)
+{
+	clock_t t = clock();
+	int n;
+	
+	for (n = 100; n <= 1000000000; n *= 10) {
+		printf("%d - %d...\n", n+2, 9*n - 1);
+		if ( sub(n+2, 9*n - 1) ) break;
+	}
+	
+    printf("time %f\n", (clock() - t) / CLK_TCK);
+	return 0;
+}
+

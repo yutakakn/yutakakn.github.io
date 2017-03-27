@@ -1,0 +1,126 @@
+/*'98/2/1 - 2/6
+ *Ｃマガジン '98/2月号『Ｃマガ電脳クラブ　第８３回』　
+ *　with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9802.C
+ *
+ *標題【掛けても足しても】
+ *
+ *※NEC PC-9800 Series(Windows95)でミリ秒単位の時間測定を行うには、
+ *　config.sysに "DEVICE=A:\WINDOWS\COMMAND\HRTIMER.SYS" の1行を
+ *　入れます｡
+ *
+ *Copyright (C)1995-1998 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ *<e-mail>yutaka@timpani.seg.kobe-u.ac.jp
+ *<URL>http://www25.seg.kobe-u.ac.jp/yutaka/
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+int keta,cnts;
+
+int getKeta(long n)
+{
+	static long k[] = {0,10,100,1000,10000,100000,1000000};
+	int i;
+
+	for(i = 1 ; i <= 6 ; i++)
+		if(k[i] > n) return( i );
+	return 0;
+}
+
+long convert(char *s)
+{
+	if(*s == '0') return 0;
+	return( atol(s) );
+}
+
+long ten(int n)
+{
+	long s = 1L;
+	int i;
+
+	for(i = 0 ; i < n ; i++) s *= 10L;
+	return( s );
+}
+
+void sub2(long a,long b,long c,int ka,int kb,int kc)
+{
+	static char buf[10],back;
+	long mul,plus,b1,b2,d,e;
+	int i;
+
+	mul = 0;
+	plus = a + b + c;
+	sprintf(buf,"%ld",b);
+	for(i = 1 ; i <= kb - 1 ; i++){
+		back = buf[i];
+		buf[i] = 0;
+		b1 = atol(&buf[0]);
+		buf[i] = back;
+		b2 = atol(&buf[i]);
+
+		d = a * ten(i) + b1;
+		e = b2 * ten(kc) + c;
+		if(plus == d + e){
+			mul = a * b * c;
+			if(mul == d * e){
+				printf("%ld x %ld x %ld = %ld x %ld\n",a,b,c,d,e);
+				cnts++;
+			}
+		}
+		d = 10 * c + b1;
+		e = b2 * ten(ka) + a;
+		if(plus == d + e){
+			if(mul == 0) mul = a * b * c;
+			if(mul == d * e){
+				printf("%ld x %ld x %ld = %ld x %ld\n",a,b,c,d,e);
+				cnts++;
+			}
+		}
+	}
+}
+
+void sub(void)
+{
+	long max,a,b,c;
+	int ka,kb,kc;
+
+	max = ten(keta - 2) - 1;
+	for(b = 11 ; b <= max ; b++){
+		kb = getKeta(b);
+		for(a = 1 ; a <= max ; a++){
+			ka = getKeta(a);
+			if(ka > kb) break;
+			if(ka + kb >= keta) break;
+			for(c = a ; c <= max ; c++){
+				kc = getKeta(c);
+				if(ka + kb + kc < keta) continue;
+				if(ka + kb + kc > keta) break;
+				sub2(a,b,c,ka,kb,kc);
+			}
+		}
+	}
+}
+
+int main(void)
+{
+	clock_t s;
+
+	s = clock();
+	cnts = 0;
+	for(keta = 5 ; keta <= 10 ; keta++){
+		printf("%d桁検索中\n",keta);
+		sub();
+		if(cnts > 0){
+			printf("...以上 %d個\n",cnts); break;
+		}
+	}
+	s = clock() - s;
+	printf("実行時間 %8.2f 秒\n",(double)s / CLOCKS_PER_SEC);
+
+	return 0;
+}

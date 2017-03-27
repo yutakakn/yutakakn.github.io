@@ -1,0 +1,188 @@
+/* 2002/2/2
+ *
+ * puz0202.c    with Visual C++ 6.0(Windows2000)
+ *
+ * CMAGAZINE 2002/02 No.131[3乗数の和]
+ *
+ * Copyright (C)1996-2002 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+#include <assert.h>
+
+#define ELEM(n) (sizeof(n) / sizeof(n[0]))
+
+
+#define MAXNUM 1625  /* 32bit型整数で扱える3乗の最大値(1625^3) */
+#define PATTERN 3    /* 和の組み合わせ数 */
+
+int maxnum;
+int trinum[MAXNUM];  /* 3乗和テーブル */
+
+
+#define HASH_SIZE 1048573  /* ハッシュサイズ(素数) */
+#define EMPTY_HASH (-1)
+#define OK_HASH 1
+
+/* ハッシュ */
+typedef struct {
+	int empty;           /* ハッシュが空かどうかを示す */
+	int no[PATTERN][2];  /* 2数の組み合わせ */
+	int num;             /* 3乗数和 */
+	int count;           /* 組み合わせ数 */
+} hash_t;
+
+hash_t hash[HASH_SIZE];  /* ハッシュテーブル */
+
+
+int list[512];  /* 解の候補となる3乗数和 */
+int n_list;
+
+
+/* 3乗数和からハッシュキーを求める */
+int get_hash_key(int num)
+{
+	int key, cnt;
+
+	cnt = 0;
+	key = num % HASH_SIZE;
+
+	/* オープンアドレス法 */
+	do {
+		if (hash[key].empty == EMPTY_HASH || hash[key].num == num) {
+			return (key);
+		}
+
+		key++;
+		key %= HASH_SIZE;
+
+		cnt++;
+
+	} while (cnt < HASH_SIZE);
+
+
+	printf("ERROR: Hash full\n");
+	exit(1);
+}
+
+
+/* 3乗数和(num)と数の組み合わせ(no1,no2)をハッシュテーブルへセットする */
+int set_hash(int num, int no1, int no2)
+{
+	int key, c;
+
+	key = get_hash_key(num);
+
+	c = hash[key].count;
+	assert(c < PATTERN);
+
+	hash[key].empty = OK_HASH;
+	hash[key].no[c][0] = no1;
+	hash[key].no[c][1] = no2;
+	hash[key].num = num;
+	hash[key].count++;
+
+	return (hash[key].count);  /* 組み合わせ数を返す */
+}
+
+/* ハッシュテーブルの初期化 */
+void init_hash(void)
+{
+	int i;
+
+	for (i = 0 ; i < HASH_SIZE ; i++) {
+		memset(&hash[i], 0, sizeof(hash_t));
+		hash[i].empty = EMPTY_HASH;
+	}
+}
+
+
+/* qsort()用比較関数 */
+int sort_func(const void *arg1, const void *arg2)
+{
+	return (*(int *)arg1 - *(int *)arg2);
+}
+
+
+/* メイン処理 */
+void sub(void)
+{
+	int i, j, n, val, ret, key;
+
+	for (i = 1 ; i <= maxnum ; i++) {
+		for (j = i ; j <= maxnum ; j++) {
+			n = trinum[i] + trinum[j];
+
+			val = set_hash(n, i, j);
+
+			/* 3乗数和の個数が3(以上)となるものを取っておく */
+			if (val == PATTERN) {
+				assert(n_list < ELEM(list));
+				list[n_list++] = n;
+
+				//printf("%d^3 + %d^3 = %d\n", i, j, n);
+			}
+		}
+	}
+
+	/* 昇順に並び替える */
+	qsort(list, n_list, sizeof(int), sort_func);
+
+	/* 候補の中から本当に組み合わせが3つだけのものを探す */
+	for (i = 0 ; i < n_list ; i++) {
+		key = get_hash_key(list[i]);
+		ret = hash[key].count;
+
+		if (ret == PATTERN) {
+			val = list[i];
+			printf("最小和 %d\n", val);
+
+			for (j = 0 ; j < PATTERN ; j++) {
+				printf("= %d^3 + %d^3\n", hash[key].no[j][0], hash[key].no[j][1]);
+			}
+
+			break;
+		}
+	}
+
+}
+
+/* いろいろと初期化 */
+void init(void)
+{
+	int i, n;
+
+	maxnum = MAXNUM - 1;
+
+	for (i = 1 ; i <= MAXNUM ; i++) {
+		trinum[i] = i * i * i;
+
+		n = trinum[i] * 2;
+
+		if (n <= 0 || n >= 2147483647) {
+/*			printf("OverFlow! %d\n", i);*/
+			maxnum = i - 1;
+			break;
+		}
+	}
+
+	init_hash();
+}
+
+int main(void)
+{
+	clock_t tick = clock();
+
+	init();
+	sub();
+
+    printf("time %.2f\n", (double)(clock() - tick) / CLOCKS_PER_SEC);
+	return 0;
+}
+
+

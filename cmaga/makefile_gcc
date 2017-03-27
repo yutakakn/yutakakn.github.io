@@ -1,0 +1,28 @@
+#+---------------------------+
+#|makefile (for gcc 2.95.2)  |
+#+---------------------------+
+
+PROGRAM = puzXXXX.c
+TARGET = a.out
+PRESRC = $(PROGRAM:.c=.i)
+
+# -O2: 最適化
+# -funroll-loops: ループ展開の最適化
+# -Wall: 大部分の警告を有効にする
+OPTION = -O2 -funroll-loops -Wall -Wstrict-prototypes -g
+EXEC = -o $(TARGET)
+CC = gcc
+
+$(TARGET): $(PROGRAM)
+	$(CC) $(OPTION) $(EXEC) $(PROGRAM)
+
+clean:
+	rm -f $(TARGET) *.o core
+
+pre:
+	$(CC) -E -P $(OPTION) $(PROGRAM) > $(PRESRC)
+
+sjis:
+	cp -f $(PROGRAM) $(PROGRAM).sjis
+	qkc -s $(PROGRAM).sjis
+

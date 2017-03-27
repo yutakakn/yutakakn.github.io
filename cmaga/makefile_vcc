@@ -1,0 +1,22 @@
+# ┏━━━━━━━━━━━━━━━━━━━━━┓
+# ┃makefile (for Visual C++ .NET)            ┃
+# ┗━━━━━━━━━━━━━━━━━━━━━┛
+
+PROGRAM = puzXXXX.c
+TARGET = a.exe
+
+CC = cl
+EXEC = /Fe$(TARGET)
+
+
+# /TC: Cと見なす
+# /Wall: 警告レベル   /nologo: メッセージの抑止  /Zi: デバッグ情報生成
+OPTION = /Ox /TC /Wall /nologo /Zi
+
+
+$(TARGET): $(PROGRAM)
+    $(CC) $(OPTION) $(EXEC) $(PROGRAM)
+
+clean:
+    del $(TARGET)
+

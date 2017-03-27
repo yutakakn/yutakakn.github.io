@@ -1,0 +1,152 @@
+/* 2001/7/22
+ *
+ * puz0108.c    with Borland C++Compiler 5.5.1(Windows2000)
+ *                   gcc 2.96(RedHat Linux 7.1)
+ *
+ * CMAGAZINE 2001/8 No.125[リング平方数]
+ *
+ * Copyright (C)1996-2001 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <assert.h>
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+
+#ifdef __GNUC__
+    #define INLINE inline
+#else
+    #define INLINE
+#endif
+
+
+#define MAXNUM 1000                 /* 求める最大のN */
+#define MAXTWICE (MAXNUM * 2 - 1)   /* そのNに対する最大の平方数 */
+
+int twicenum[MAXTWICE];     /* twicenum[数] = 1(平方数), = 0(平方数でない) */
+int use[MAXNUM];            /* 数の使用チェック用テーブル */
+int map[MAXNUM][MAXNUM];    /* map[A][B]: A + Bが平方数かどうかを表す */
+
+int rec[MAXNUM];       /* 解の記録用テーブル */
+int rec_pos;           /* そのテーブルのindex */
+
+int N;             /* Nの値 */
+int ans_cnt;       /* 解の個数 */
+
+
+/* 再帰を使ってリング平方数を探す。
+ * リングは1～Nの玉から環状に構成され、一番始めに'1'を置き
+ * 右回りへ求めていく。
+ *
+ * count = 決定した玉の数
+ * start = 左隣りの玉の数値
+ */
+void sub(int count, int start)
+{
+    int i, s;
+
+    if (count >= N) {
+        /* 鏡像解の排除 */
+        if (rec[1] > start)
+            return;
+
+        /* リングの頭とお尻の和が平方数になっているか */
+        s = 1 + start;
+        if (twicenum[s] == 0)
+            return;
+
+        /* ここまで来れば解 */
+        ans_cnt++;
+        printf("No. %d\n", ans_cnt);
+        printf("┏");
+        for (i = 0; i < rec_pos/2 ; i++) {
+            printf("━%2d", rec[i]);
+        }
+        printf("┓\n");
+        printf("┃%*s┃\n", (rec_pos/2)*4, "");
+        printf("┗");
+        for (i = rec_pos - 1 ; i >= rec_pos/2 ; i--) {
+            printf("━%2d", rec[i]);
+        }
+        printf("┛\n");
+
+        return;
+    }
+
+    /* 数値startとの和が平方数になるものを探す */
+    for (i = 1 ; i <= N ; i++) {
+        if (map[start][i] == 0)
+            continue;
+
+        if (use[i])
+            continue;
+
+        use[i] = 1;
+        rec[rec_pos++] = i;
+
+        sub(count + 1, i);
+
+        rec[--rec_pos] = 0;
+        use[i] = 0;
+    }
+}
+
+void init(void)
+{
+    int i, j, sum;
+
+    /* 平方数判別テーブルを作る */
+    for (i = 1 ; i < MAXTWICE ; i++) {
+        j = i * i;
+        if (j >= MAXTWICE)
+            break;
+        twicenum[j] = 1;
+    }
+
+    /* '1'は最初にかならず使う。これにより回転解を除ける。 */
+    use[1] = 1;
+    rec_pos = 0;
+    rec[rec_pos++] = 1;
+
+    /* 2数の和の平方数判別テーブルを作る */
+    for (i = 1 ; i < MAXNUM ; i++) {
+        for (j = 1 ; j < MAXNUM ; j++) {
+            map[i][j] = 0;
+            if (i != j) {
+                sum = i + j;
+                if (twicenum[sum]) {
+                    map[i][j] = sum;
+                }
+            }
+        }
+    }
+
+    ans_cnt = 0;
+}
+
+int main(void)
+{
+    clock_t t = clock();
+    int i;
+
+    init();
+
+    for (i = 3 ; i < MAXNUM ; i++) {
+        N = i;
+        sub(1, 1);
+
+        /* 解が見つかった */
+        if (ans_cnt) {
+            break;
+        }
+    }
+    printf("最小のN = %d (組み合わせ %d 通り)\n", i, ans_cnt);
+
+    printf("time %.2f\n", (double)((clock() - t) / CLOCKS_PER_SEC));
+    return 0;
+}
+
+

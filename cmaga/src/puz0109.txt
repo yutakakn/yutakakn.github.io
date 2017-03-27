@@ -1,0 +1,273 @@
+/* 2001/8/19 - 9/18
+ *
+ * puz0109.c    with Borland C++Compiler 5.5.1(Windows2000)
+ *                   gcc 2.96(RedHat Linux 7.1)
+ *
+ * CMAGAZINE 2001/9 No.126[ブロック・バイ・ブロックス]
+ *
+ * Copyright (C)1996-2001 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <assert.h>
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+
+#ifdef __GNUC__
+	#define INLINE inline
+#else
+	#define INLINE
+#endif
+
+
+#define SIZE 20
+#define SSIZE (SIZE * SIZE * SIZE)
+#define POS(x,y,z) ((x) + (y)*SIZE + (z)*SIZE*SIZE)
+
+#define EMPTY 0
+#define WALL 'W'
+
+int board[SSIZE];
+int xsize, ysize, zsize;
+int block_count;
+
+int ans_cnt;
+
+int record[1000][SSIZE];
+
+
+int base_block[6][6] = {
+	{
+		POS(0,0,0), POS(1,0,0),
+		POS(0,1,0), POS(1,1,0),
+		POS(0,2,0), POS(1,2,0),
+	},
+	{
+		POS(0,0,0), POS(1,0,0), POS(2,0,0),
+		POS(0,1,0), POS(1,1,0), POS(2,1,0),
+	},
+	{
+		POS(0,0,0), POS(1,0,0),
+		POS(0,0,1), POS(1,0,1),
+		POS(0,0,2), POS(1,0,2),
+	},
+	{
+		POS(0,0,0), POS(0,1,0),
+		POS(0,0,1), POS(0,1,1),
+		POS(0,0,2), POS(0,1,2),
+	},
+	{
+		POS(0,0,0), POS(1,0,0), POS(2,0,0),
+		POS(0,0,1), POS(1,0,1), POS(2,0,1),
+	},
+	{
+		POS(0,0,0), POS(0,1,0), POS(0,2,0),
+		POS(0,0,1), POS(0,1,1), POS(0,2,1),
+	},
+};
+
+
+void disp(int *board)
+{
+	int x, y, z, c;
+
+	printf("[%d,%d,%d]\n", xsize, ysize, zsize);
+
+	for (z = 0 ; z < zsize ; z++) {
+		for (y = 0 ; y < ysize ; y++) {
+			for (x = 0 ; x < xsize ; x++) {
+				c = board[POS(x,y,z)];
+				if (c == 0)
+					printf("-");
+				else
+					printf("%c", c);
+			}
+			printf("\n");
+		}
+		if (z < zsize - 1)
+			printf("↓\n");
+	}
+	printf("\n");
+}
+
+
+INLINE int is_cutable(void)
+{
+	int x, y, z, c, t;
+
+	/* XY平面を調べる */
+	for (z = 0 ; z < zsize - 1 ; z++) {
+		for (y = 0 ; y < ysize ; y++) {
+			for (x = 0 ; x < xsize ; x++) {
+				c = POS(x,y,z);
+				t = POS(x,y,z+1);
+				if (board[c] == board[t])
+					goto SKIP;
+			}
+		}
+		return 1;
+
+	SKIP:;
+	}
+
+	/* YZ平面を調べる */
+	for (x = 0 ; x < xsize - 1 ; x++) {
+		for (y = 0 ; y < ysize ; y++) {
+			for (z = 0 ; z < zsize ; z++) {
+				c = POS(x,y,z);
+				t = POS(x+1,y,z);
+				if (board[c] == board[t])
+					goto SKIP2;
+			}
+		}
+		return 1;
+
+	SKIP2:;
+	}
+
+	/* ZX平面を調べる */
+	for (y = 0 ; y < ysize - 1 ; y++) {
+		for (x = 0 ; x < xsize ; x++) {
+			for (z = 0 ; z < zsize ; z++) {
+				c = POS(x,y,z);
+				t = POS(x,y+1,z);
+				if (board[c] == board[t])
+					goto SKIP3;
+			}
+		}
+		return 1;
+
+	SKIP3:;
+	}
+
+	return 0;   /* どの平面もすぱっと切れない */
+}
+
+
+void sub(int n)
+{
+	int c, i, j, k, t;
+	int cite[6];
+
+	/* ブロックがすべて置けた */
+	if (n >= block_count) {
+		if (is_cutable()) {
+/*			printf("切れちゃうよ～！！\n");*/
+		} else {
+			ans_cnt++;
+			printf("No.%d\n", ans_cnt); disp(board);
+		}
+
+		return;
+	}
+
+	t = POS(xsize-1, ysize-1, zsize-1);
+	for (c = 0 ; c < t ; c++) {
+		if (board[c] == 0)
+			break;
+	}
+	if (c == t)
+		return;
+
+	/* 6種類のブロックが置けるか試す */
+	for (i = 0 ; i < 6 ; i++) {
+		for (j = 0 ; j < 6 ; j++) {
+			t = c + base_block[i][j];
+			if (board[t] != 0)
+				break;
+
+			cite[j] = t;
+		}
+		if (j < 6)
+			continue;
+
+		for (k = 0 ; k < 6 ; k++) {
+			board[cite[k]] = 'A' + n;
+		}
+
+		sub(n + 1);
+
+		for (k = 0 ; k < 6 ; k++) {
+			board[cite[k]] = 0;
+		}
+	}
+}
+
+
+INLINE void init(int xs, int ys, int zs)
+{
+	int x, y, z, s;
+
+	ans_cnt = 0;
+
+	xsize = xs; ysize = ys; zsize = zs;
+
+	for (s = 0 ; s < SSIZE ; s++) {
+		board[s] = WALL;
+	}
+
+	for (z = 0 ; z < zsize + 1 ; z++) {
+		for (y = 0 ; y < ysize + 1 ; y++) {
+			for (x = 0 ; x < xsize + 1 ; x++) {
+				if (x == xsize || y == ysize || z == zsize) {
+					board[POS(x,y,z)] = WALL;
+				} else {
+					board[POS(x,y,z)] = 0;
+				}
+			}
+		}
+	}
+
+	s = xsize * ysize * zsize;
+	if (s % 6) {
+		printf("直方体の体積は6の倍数であること！\n");
+		return;
+	}
+	block_count = s / 6;
+	//printf("ブロックは %d 個あればよい(%d,%d,%d)\n", block_count, xs, ys, zs);
+}
+
+int main(void)
+{
+	clock_t tick = clock();
+	int s, x, y, z, t;
+	int flag = 0, allcnt;
+
+	for (s = 36 ; s < SSIZE ; s += 6) {
+		allcnt = 0;
+		for (y = 2 ; y < SIZE ; y++) {
+			for (x = 2 ; x < SIZE ; x++) {
+				t = x * y;
+				if (s <= t)
+					break;
+				if (s % t)
+					continue;
+
+				z = s / t;
+				if (x >= y && y >= z) {
+					init(x, y, z);
+					sub(0);
+
+					if (ans_cnt) {
+						flag++;
+						//printf("(%d,%d,%d) = %d\n", x, y, z, ans_cnt);
+						allcnt += ans_cnt;
+					}
+				}
+			}
+		}
+
+		if (flag)
+			break;
+	}
+
+	printf("最小 %d 個のブロックで %d 通りの組み方\n", block_count, allcnt/8);
+
+    printf("time %.2f\n", (double)((clock() - tick) / CLOCKS_PER_SEC));
+	return 0;
+}
+
+

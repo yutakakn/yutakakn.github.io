@@ -1,0 +1,259 @@
+/* 2001/4/28
+ *
+ * puz0105.c    with gcc 2.95.2(TurboLinux Workstation 6.0)
+ * CMAGAZINE 2001/5 No.122[REV STAR]
+ *
+ * Copyright (C)1996-2001 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <assert.h>
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+
+#ifdef __GNUC__
+	#define INLINE inline
+#else
+	#define INLINE
+#endif
+
+
+/* コインの状態 */
+enum {
+	EMPTY = 0,  /* 空(黒丸) */
+	HEAD = 1,   /* 表 */
+	TAIL = 2,   /* 裏 */
+};
+
+/* 星型盤のピースにA～Jの文字を振る
+
+        A
+
+   B  C   D  E
+
+     F     G
+
+        H
+
+   I         J
+ */
+enum {
+	A, B, C, D, E, F, G, H, I, J
+};
+
+/* 盤のパターンテーブル */
+#define MAX_PATTERN 1048576   /* 2^20 */
+int pattern[MAX_PATTERN];
+
+/* 生成パターンの記録 */
+#define MAX_RECORD 3000
+typedef struct {
+	int prev;
+	int step;
+	int board;
+} record_t;
+
+record_t record[MAX_RECORD];
+int rec_cnt;
+
+/* コインの配置情報 */
+typedef struct {
+	int count;
+	int coin[2][3];
+} move_t;
+
+move_t move[10] = {
+	{3, {{C,F,I}, {D,G,J}}},  /* A */
+	{3, {{C,D,E}, {F,H,J}}},  /* B */
+	{2, {{D,E}, {F,I}}},      /* C */
+	{2, {{C,B}, {G,J}}},      /* D */
+	{3, {{D,C,B}, {G,H,I}}},  /* E */
+	{2, {{H,J}, {C,A}}},      /* F */
+	{2, {{D,A}, {H,I}}},      /* G */
+	{2, {{F,B}, {G,E}}},      /* H */
+	{3, {{F,C,A}, {H,G,E}}},  /* I */
+	{3, {{H,F,B}, {G,D,A}}},  /* J */
+};
+
+
+/* 盤の表示 */
+void show_board(int board)
+{
+	static char *s[] = {
+		"・", "●", "○",
+	};
+	int i, tmp[10];
+
+	for (i = 0 ; i < 10 ; i++) {
+		tmp[i] = (board >> 2*i) & 3;
+	}
+
+	printf("     %s\n", s[tmp[0]]);
+	printf("%s  %s%s  %s\n", s[tmp[1]], s[tmp[2]], s[tmp[3]], s[tmp[4]]);
+	printf("   %s  %s\n", s[tmp[5]], s[tmp[6]]);
+	printf("     %s\n", s[tmp[7]]);
+	printf("  %s    %s\n", s[tmp[8]], s[tmp[9]]);
+
+/*	printf("board = %x\n\n", board);*/
+}
+
+
+/* 最短手までの遷移状態の表示 */
+void found(int n)
+{
+	if (record[n].prev == -1) {
+		printf("開始盤面\n");
+		show_board(record[n].board);
+		return;
+	}
+
+	found(record[n].prev);
+
+	printf("%d 手\n", record[n].step);
+	show_board(record[n].board);
+}
+
+/* コインをpos位置に置く */
+INLINE void put_coin(int *board, int pos, int coin)
+{
+	*board &= ~(3 << 2*pos);
+	*board |= (coin << (2*pos));
+}
+
+/* pos位置のコインを取得する */
+INLINE int get_coin(int board, int pos)
+{
+	return ( (board >> (2*pos)) & 3 );
+}
+
+
+/* コインがすべて裏面になったかどうかを判定 */
+int is_tailcoin(int board)
+{
+	int i, cnt;
+
+	cnt = 0;
+	for (i = A ; i <= J ; i++) {
+		if (get_coin(board, i) == TAIL)
+			cnt++;
+	}
+	if (cnt == 9)
+		return 1;
+	return 0;
+}
+
+
+/* 幅優先探索でコインを移動させる */
+void sub(int first_board)
+{
+	int i, cnt, k, step, prev, board, new_board;
+	int s, t, u, v, pos;
+
+	record[0].prev = -1;
+	record[0].step = 0;
+	record[0].board = first_board;
+	rec_cnt = 1;
+	prev = rec_cnt - 1;
+
+	/* 1手目から順に幅優先探索を行う */
+	for (step = 1 ; step < 100 ; step++) {
+		cnt = 0;
+
+		/* 1手前の盤を取り出す */
+		for (i = prev ; i >= 0 ; i--) {
+			if (record[i].step < step - 1)
+				break;
+
+			board = record[i].board;
+
+			/* 手数を1つ進める */
+			for (k = A ; k <= J ; k++) {
+				if (get_coin(board, k) != EMPTY)
+					continue;
+
+				for (t = 0 ; t < 2 ; t++) {
+					for (s = move[k].count ; s >= 2 ; s--) {
+						u = move[k].coin[t][s - 1];
+
+						/* u のコインを k へ移動させ、
+						 * s-2 ～ 0 のコインをひっくり返す。
+						 * u は空にする。
+						 */
+						new_board = board;
+						put_coin(&new_board, u, EMPTY);
+						put_coin(&new_board, k, get_coin(board, u));
+						for (v = s - 2 ; v >= 0 ; v--) {
+							pos = move[k].coin[t][v];
+							put_coin(&new_board, pos, get_coin(board, pos) ^ 3);
+						}
+
+/*						printf("k %d t %d s %d u %d\n", k, t, s, u);*/
+/*						show_board(new_board); exit(1);*/
+
+						assert(new_board < MAX_PATTERN);
+						if (pattern[new_board] == 0) { /* 新規盤面なら登録 */
+							cnt++;
+							pattern[new_board] = 1;
+
+							assert(rec_cnt < MAX_RECORD);
+							record[rec_cnt].prev = i;
+							record[rec_cnt].step = step;
+							record[rec_cnt].board = new_board;
+							rec_cnt++;
+						}
+
+						/* 解：コインがすべて裏面になった */
+						if (is_tailcoin(new_board)) {
+							printf("解: %d 手\n", step);
+							goto END;
+						}
+
+					}
+				}
+			}
+
+		}
+		if (cnt == 0)
+			break;
+
+		prev = rec_cnt - 1;
+	}
+
+END:;
+
+	found(rec_cnt - 1);
+}
+
+/* 開始盤面を作る */
+int init(void)
+{
+	int j, flag;
+
+	flag = 0;
+	for (j = A ; j <= J ; j++) {
+		put_coin(&flag, j, HEAD);
+	}
+	put_coin(&flag, A, EMPTY);
+
+	pattern[flag] = 1;
+
+	return (flag);
+}
+
+int main(void)
+{
+	clock_t t = clock();
+	int first_board;
+
+	first_board = init();
+
+	sub(first_board);
+
+    printf("time %.2f\n", (double)((clock() - t) / CLOCKS_PER_SEC));
+	return 0;
+}
+
+

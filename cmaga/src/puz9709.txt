@@ -1,0 +1,125 @@
+/*'97/8/22 - 8/25
+ *Ｃマガジン '97/9月号『Ｃマガ電脳クラブ　第７８回』　
+ *　with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9709.C
+ *
+ *標題【いちいち調べる？】
+ *
+ *gcc puz9709.c -o puz9709 -lm (UNIX)
+ *
+ *Copyright (C)1997 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ *<e-mail>yutaka@timpani.seg.kobe-u.ac.jp
+ *<URL>http://www25.seg.kobe-u.ac.jp/yutaka/
+ */
+#include <stdio.h>
+#include <math.h>
+
+int cnt;   /* 解の個数 */
+
+/* 最大公約数 */
+int gcd(int x,int y)
+{
+	int t;
+
+	while(y != 0){
+		t = x % y;
+		x = y;
+		y = t;
+	}
+	return( x );
+}
+
+/* 分数(numerator/denominator)を約分し既約分数にします。*/
+void reduce(int *numerator,int *denominator)
+{
+	int g;
+
+	g = gcd(*numerator,*denominator);
+	*numerator /= g;
+	*denominator /= g;
+}
+
+void found(int a,int shi,int bo)
+{
+	int minus = 1;
+	int a2,a3;
+
+	cnt++;
+	if(shi < 0){
+		minus = -1;
+		shi = (-1)*shi;
+	}
+	reduce(&shi,&bo);
+	a2 = minus * a * shi / bo;
+	a3 = a * shi * shi / bo / bo;
+	if(bo == 1)
+		printf("初項=%d 公比=%d  %d %d %d\n",
+			a,minus*shi/bo,a,a2,a3);
+	else
+		printf("初項=%d 公比=%d/%d  %d %d %d\n",
+			a,minus*shi,bo,a,a2,a3);
+}
+
+int main(void)
+{
+	int a,shi,bo;
+	int u,v,ut,vt;
+	int r1,shi1,bo1;
+	int r2,shi2,bo2;
+	int t,t2;
+
+	puts("ＣMAGAZINEパズル");
+	/*a = 1 ～ 148に対して
+	 * r^2 + r + 1 = 111 / a
+	 *を満たす r を求める。rは整数か分数である。
+	 */
+	for(a = 1 ; a <= 148 ; a++){
+		shi = a - 111;
+		bo = a;
+
+		/* 判別式Ｄ(=b*b - 4ac) */
+		u = bo + (-4)*shi; v = bo;
+		if(u < 0) continue;
+
+		/* 既約分数にする */
+		reduce(&u,&v);
+
+		/* √が外れるか？ */
+		ut = (int)sqrt((double)u);
+		if(ut * ut != u) continue;
+		vt = (int)sqrt((double)v);
+		if(vt * vt != v) continue;
+
+		/* 解の公式でｒを解く！ */
+		shi = ut; bo = vt;
+		shi1 = (-1)*bo - shi; bo1 = 2*bo;
+		r1 = shi1 / bo1;
+		shi2 = (-1)*bo + shi; bo2 = 2*bo;
+		r2 = shi2 / bo2;
+
+		/* 第2項、第3項が整数になるかチェック */
+		t = a * shi1;
+		if(t < 0) t *= (-1);
+		if(t % bo1 != 0) continue;
+		t = a*shi1*shi1;
+		t2 = bo1 * bo1;
+		if(t % t2 != 0) continue;
+		found(a,shi1,bo1);         /* 解 */
+
+		/* 重複解のチェック */
+		if(shi1 == shi2 && bo1 == bo2) continue;
+
+		t = a * shi2;
+		if(t < 0) t *= (-1);
+		if(t % bo2 != 0) continue;
+		t = a*shi2*shi2;
+		t2 = bo2 * bo2;
+		if(t % t2 != 0) continue;
+		found(a,shi2,bo2);
+	}
+	printf("解 %d 通り\n",cnt);
+
+	return 0;
+}

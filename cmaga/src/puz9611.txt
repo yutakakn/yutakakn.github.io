@@ -1,0 +1,256 @@
+/*'96/10/23 - 10/26
+ *Ｃマガジン '96/11月号『Ｃマガ電脳クラブ　第６８回』　
+ *  with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9611.C
+ *
+ *標題「たたみ敷き」
+ *
+ *Copyright (C) 1995-1996 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define WALL '*'       /*壁マーク*/
+#define EMPTY '\0'     /*空マーク*/
+#define DEL 'D'        /*削除マーク*/
+
+#define COL 5   /*縦*/
+#define ROW 6   /*横*/
+
+#define MAX ((COL + 1)*ROW - 2)          /* sub()で使う */
+#define BUF_SIZE ( (COL+1)*(ROW+1) + 1 ) /* バッファサイズ */
+#define POS(x,y) ( (x) + (y)*(ROW+1) )   /* 位置マクロ */
+
+/*□□□□□□■　左図のように buf を空(EMPTY)と壁(WALL)で
+ *□□□□□□■  埋める。
+ *□□□□□□■  こうする事で駒（畳）を置くとき、範囲外
+ *□□□□□□■  チェックを省ける。
+ *□□□□□□■
+ *■■■■■■■
+ */
+char buf[ BUF_SIZE ];   /*COL x ROWの盤*/
+char ans_buf[10][ BUF_SIZE ];    /*解答バッファ*/
+char tmp[ BUF_SIZE ];    /*テンポラリ*/
+
+int shape[2] = {1, ROW + 1};  /*２種類の駒の位置*/
+char name[2] = {'o','x'};   /* oo     x
+							 *    と  x  向きの２つ。
+							 */
+int ans;        /* 残りの敷き方の通り */
+int one_ans;    /* ans = 1となる駒の置き方の個数 */
+int Least;      /* 駒の最小個数 */
+
+/* 盤の中身を表示します。 */
+void disp(char *buf)
+{
+	int x,y;
+	char c;
+
+	for(y = 0 ; y < COL + 1 ; y++){
+		for(x = 0 ; x < ROW + 1 ; x++){
+			if( (c = buf[ POS(x,y) ]) == WALL) putchar('*');
+			else if( c == EMPTY) putchar(' ');
+			else printf("%c",c);
+		}
+		putchar('\n');
+	}
+}
+
+/* s1 と s2 の盤の中身を比較して、一致すれば０を、そうでなければ
+ * １を返します。
+ */
+int ban_cmp(char *s1,char *s2)
+{
+	int x,y,c;
+
+	for(y = 0 ; y < COL ; y++)
+		for(x = 0 ; x < ROW ; x++)
+			if(s1[c = POS(x,y)] != s2[c]) return 1;
+	return 0;
+}
+
+/*重複解を検索します。
+ *
+ *cnt 解の総数
+ *p　 比較すべき自分の番号
+ */
+void find_same(int p,int cnt)
+{
+	int i;
+
+	for(i = 0 ; i < cnt ; i++){
+		if(i == p) continue;  /*自分同士は比較しない*/
+		if(ans_buf[i][0] == DEL) continue;
+		if(ban_cmp(tmp,ans_buf[i]) == 0)
+			ans_buf[i][0] = DEL;
+	}
+}
+
+/* そのまま自分をコピーする */
+void normal(int p)
+{
+	int x,y;
+
+	memset(tmp,0,sizeof(tmp));
+	for(y=0;y<COL;y++)
+		for(x=0;x<ROW;x++) tmp[POS(x,y)] = ans_buf[p][POS(x,y)];
+}
+
+/* 回転させる */
+void rotate(int p)
+{
+	int x,y;
+
+	memset(tmp,0,sizeof(tmp));
+	for(y=0;y<COL;y++)
+		for(x=0;x<ROW;x++)
+			tmp[POS(ROW-1-x,COL-1-y)] = ans_buf[p][POS(x,y)];
+}
+
+/* 上下を逆さまにする */
+void reverse1(int p)
+{
+	int x,y;
+
+	memset(tmp,0,sizeof(tmp));
+	for(y = 0 ; y < COL ; y++)
+		for(x = 0 ; x < ROW ; x++)
+			tmp[POS(x,COL-1-y)] = ans_buf[p][POS(x,y)];
+}
+
+/* 左右裏返す */
+void reverse2(int p)
+{
+	int x,y;
+
+	memset(tmp,0,sizeof(tmp));
+	for(x = 0 ; x < ROW ; x++)
+		for(y = 0 ; y < COL ; y++)
+			tmp[POS(ROW-1-x,y)] = ans_buf[p][POS(x,y)];
+}
+
+/* cnt個の解答バッファから重複する解を除く */
+void ans_search(int cnt)
+{
+	int i,c;
+
+	for(i = 0 ; i < cnt ; i++){
+		if(ans_buf[i][0] == DEL) continue;  /*削除されたものは調べない*/
+		normal(i); find_same(i,cnt);
+		rotate(i); find_same(i,cnt);
+		reverse1(i); find_same(i,cnt);
+		reverse2(i); find_same(i,cnt);
+	}
+	c = 0;
+	for(i = 0 ; i < cnt ; i++)
+		if(ans_buf[i][0] != DEL){
+			c++;
+			disp(ans_buf[i]);
+		}
+	printf("最低 %d 個の畳で、敷き方は %d 通り\n",Least,c);
+}
+
+/* 解答が見つかった時の処理 */
+void found(void)
+{
+	ans++;
+}
+
+/* 盤に駒を置いていく */
+void sub(int pos)
+{
+	int p,s;
+	int tmp;
+
+	while(buf[pos] != EMPTY) pos++; /*空を見つける*/
+
+	for(p = 0 ; p < 2 ; p++){ /*縦向きと横向きの駒を試す*/
+		s = pos + shape[p];
+		if(buf[s] != EMPTY) continue;  /*空でない時*/
+		buf[pos] = buf[s] = name[p];   /*駒を置く*/
+
+		tmp = pos;
+		while(buf[ ++tmp ] != EMPTY);  /*次の探索位置を探す*/
+		if(tmp < MAX) sub(tmp);
+		else found(); /*見つかった*/
+
+		buf[pos] = buf[s] = EMPTY;     /*戻す*/
+	}
+}
+
+/* 盤を初期化します。 */
+void init(void)
+{
+	int x,y;
+
+	for(y = 0 ; y < COL ; y++)
+		for(x = 0 ; x < ROW ; x++) buf[ POS(x,y) ] = EMPTY;
+	x = ROW;
+	for(y = 0 ; y < COL + 1 ; y++) buf[ POS(x,y) ] = WALL;
+	y = COL;
+	for(x = 0 ; x < ROW ; x++) buf[ POS(x,y) ] = WALL;
+
+	ans = one_ans = 0;
+}
+
+/* Least個の駒を盤へ配置して、残りの駒の敷き方を検索します。 */
+void koma_put(int n)
+{
+	int x,y,pos,i,s;
+
+	if(n >= Least){
+		sub(0);            /*残りの置き方を検索*/
+		if(ans == 1){          /*置き方が１通りのみの時*/
+			memcpy( ans_buf[one_ans], buf , sizeof(buf) ); /*解コピー*/
+			one_ans++;
+		}
+		ans = 0;      /*０に戻してから再検索*/
+		return;
+	}
+
+	for(y = 0 ; y < (n==0?(COL/2+1):COL) ; y++)
+		for(x = 0 ; x < (n==0?(ROW/2):ROW) ; x++){
+			if(n == 0 && x == 0 && y == 0)
+				continue; /*１手目はPOS(0,0)に駒を置かない*/
+
+			pos = POS(x,y);
+			if(buf[pos] == EMPTY){
+				for(i = 0 ; i < 2 ; i++){
+					s = pos + shape[i];
+					if(buf[s] != EMPTY) continue;  /*空でない時*/
+					buf[pos] = buf[s] = name[i];   /*駒を置く*/
+
+					koma_put(n + 1);
+
+					buf[pos] = buf[s] = EMPTY;
+				}
+			}
+		}
+}
+
+/* 探索メイン */
+void tansaku(void)
+{
+	for(Least = 1 ; Least <= (COL*ROW/2) ; Least++){
+		printf("最低個数 %d 個を探索中...",Least);
+		init();               /*初期化*/
+		koma_put(0);          /*Least個の駒を置き検索*/
+		if(one_ans > 0){      /*置き方が１通りであった時終了*/
+			putchar('\n');
+			/*１通りとなる置き方が one_ans 個見つかった */
+			ans_search(one_ans);
+			break;
+		}else printf("解なし\n");
+	}
+}
+
+/* メインルーチン */
+int main(void)
+{
+	puts("Ｃマガジン '96/11月号『Ｃマガ電脳クラブ　第６８回』");
+	tansaku();
+	return 0;
+}

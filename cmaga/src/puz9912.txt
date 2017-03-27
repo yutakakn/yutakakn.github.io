@@ -1,0 +1,53 @@
+/* 1999/11/22
+ *
+ * puz9912.c  with C++Builder3(Windows95)
+ * CMAGAZINE 1999/12 No.105[最後の聖銭]
+ *
+ * Copyright (C)1995-1999 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <time.h>
+
+int org_circle[18] = {1, 10, 50, 100, 10, 50, 100, 10, 100, 50,
+					100, 10, 500, 50, 100, 50, 10, 100};
+int circle[18];
+
+/* コインの取り除き処理(count:聖数) */
+int sub(int count)
+{
+	int i, j, n, pos, num;
+	
+	pos = 0;
+	num = 18;
+	for (i = 0 ; i < 18 ; i++) circle[i] = org_circle[i];
+	
+	for (i = 0 ; i < 17 ; i++) {      /* 17手で1枚が残る */
+		n = (pos + count - 1) % num;
+		if (circle[n] == 500) return 0;  /* 途中で500円玉を落とすと終わり */
+		for (j = n + 1; j <= num - 1 ; j++) {
+			circle[j - 1] = circle[j];
+		}
+		num--;
+		pos = n;
+	}
+	if (circle[0] == 500) return 1;     /* 解 */
+	return 0;
+}
+
+int main(void)
+{
+	clock_t t = clock();
+	int i;
+	
+	for (i = 1 ; i <= 100 ; i++) {
+		if (sub(i) == 1) {
+			printf("解：聖数 %d\n", i);
+			break;
+		}
+	}
+
+    printf("time %f\n", (clock() - t) / CLK_TCK);
+	return 0;
+}
+

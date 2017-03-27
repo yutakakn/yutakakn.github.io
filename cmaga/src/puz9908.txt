@@ -1,0 +1,522 @@
+/*'99/7/26 - 7/31, 8/8 - 8/10
+ *
+ *puz9908.c  with LSIC-86 Ver 3.5(Windows95)
+ *CMAGAZINE 1999/8 No.101[Unique Solution Checkerboard Puzzle]
+ *
+ *Copyright (C)1995-1999 平田豊
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define SSIZE 8                   /* 盤のサイズ */
+#define SIZE (SSIZE + 1)
+#define pos(x,y) ((x) + (y)*SIZE)
+#define X(n) ((n) % SIZE)
+#define Y(n) ((n) / SIZE)
+#define MAXPOS (SIZE * (SSIZE-1) + SSIZE)
+
+typedef struct {  /* XY軸によるピースデータ */
+	int x, y;
+	int col;      /* 色(-1 or 1)。白か黒か。 */
+}Pointxy;
+
+typedef struct { /* offset値によるピースデータ */
+	int npos;
+	int col;
+}Point;
+
+Pointxy piece[12][5] = { /* 12種類のペントミノ */
+	{        /* X */
+	0,0, -1,
+	1,0, 1,
+	1,-1, -1,
+	1,1, -1,
+	2,0, -1,
+	},
+
+	{        /* I */
+	0,0, -1,
+	1,0, 1,
+	2,0, -1,
+	3,0, 1,
+	4,0, -1,
+	},
+
+	{        /* ? */
+	0,0, -1,
+	1,0, 1,
+	1,-1, -1,
+	2,0, -1,
+	3,0, 1,
+	},
+
+	{        /* F */
+	0,0, -1,
+	1,0, 1,
+	1,-1, -1,
+	2,0, -1,
+	2,1, 1,
+	},
+
+	{        /* ? */
+	0,0, -1,
+	1,0, 1,
+	1,-1, -1,
+	2,0, -1,
+	2,-1, 1,
+	},
+
+	{        /* U */
+	0,0, -1,
+	0,-1, 1,
+	1,0, 1,
+	2,0, -1,
+	2,-1, 1,
+	},
+
+	{        /* ? */
+	0,0, -1,
+	0,-1, 1,
+	1,0, 1,
+	2,0, -1,
+	2,1, 1,
+	},
+
+	{        /* L */
+	0,0, -1,
+	1,0, 1,
+	2,0, -1,
+	2,-1, 1,
+	2,-2, -1,
+	},
+
+	{        /* ? */
+	0,0, -1,
+	0,-1, 1, 
+	1,0, 1,
+	2,0, -1,
+	3,0, 1,
+	},
+
+	{        /* W */
+	0,0, -1,
+	0,1, 1,
+	1,0, 1,
+	1,-1, -1,
+	2,-1, 1,
+	},
+
+	{        /* T */
+	0,0, -1,
+	1,0, 1, 
+	2,0, -1,
+	1,1, -1,
+	1,2, 1,
+	},
+
+	{        /* ? */
+	0,0, -1,
+	1,0, 1, 
+	2,0, -1,
+	2,-1, 1,
+	3,-1, -1,
+	},
+};
+
+typedef struct {       /* チェッカーピース */
+        Point shape[16][5];  /* 最大16つのパターンデータ */
+        int n_shape;         /* パターン数 */
+        int paint;           /* 塗り方の区切り（塗り方は2種類あるため）*/
+}Putdata;
+Putdata putdata[12 + 1];
+
+int checker[2][SIZE*SIZE]; /* チェッカー盤 */
+int kind_checker;
+
+int p_flag[12 + 1];     /* ピースの使用フラグ */
+int board[SIZE*SIZE];   /* 盤 */
+int board_rec[SIZE*SIZE];  /* 盤（記録用）*/
+
+typedef struct {    /* 塗り方の区切り */
+	int start, end;
+}Put_t;
+Put_t piece_put[13];
+
+int put_count;      /* ピースの置き方が何通りあるか */
+
+/* 関数プロトタイプ宣言 */
+void board_init(void);
+
+void board_rec_disp(int *s)
+{
+	int x, y, c;
+	
+	for (y = 0 ; y < SSIZE ; y++) {
+		for (x = 0; x < SSIZE ; x++) {
+			c = s[pos(x,y)];
+			if (c == 0) c = ' ';
+			printf("%c ", c);
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+
+void board_disp(int *s)
+{
+	int x, y, c;
+	
+	for (y = 0 ; y < SSIZE ; y++) {
+		for (x = 0; x < SSIZE ; x++) {
+			c = board[pos(x,y)];
+			printf("%c ", c==1?'X':(c==-1?'-':'0'));
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+
+void shape_disp(Putdata s)
+{
+	static char *a[] = {"□","■","  "};
+	int tmp[9*9];
+	int i, j, k, x, y;
+	
+	for (i = 0; i < s.n_shape ; i++) {
+		printf("No. %d\n", i);
+		for (k = 0 ; k < 9*9 ; k++) tmp[k] = 2;
+		for (j = 0 ; j < 5 ; j++) {
+			if (s.shape[i][j].col == -1) 
+				tmp[s.shape[i][j].npos] = 0;
+			else
+				tmp[s.shape[i][j].npos] = s.shape[i][j].col;
+			
+		#if 0
+			printf("(%d,%d,<%d><%d>) ",
+				X(s.shape[i][j].npos), Y(s.shape[i][j].npos),
+				s.shape[i][j].col, s.shape[i][j].npos);
+				/**/
+		#endif
+		}
+		#if 0
+		puts("");
+		#else
+		for (x = 0 ; x < 9 ; x++) {
+			for (y = 0 ; y < 9 ; y++) {
+				/*if (a[tmp[pos(x,y)]] == 2) continue;*/
+				/*printf("%d ", tmp[pos(i,j)]);*/
+				printf("%s", a[tmp[pos(y,x)]]);/**/
+			}
+			puts("");
+		}
+		#endif
+	}
+}
+
+/* 探索メイン */
+int sub(int site)
+{
+	int recsite[5];
+	int i, j, k, tmp, pats = 5;
+	
+	for (i = 0 ;i < 13 ; i++) {  /* 13種類のピースを置く */
+		if (p_flag[i]) continue;
+		p_flag[i] = 1;
+		
+		if (i == 12) pats = 4;   /* i == 12: Iテトロミノ */
+		
+		/* ピースのパターン数 */
+		for (j = piece_put[i].start ; j <= piece_put[i].end ; j++) { 
+			for (k = 0 ; k < pats ; k++) { /* ピースのコマ構成数 */
+				recsite[k] = site + putdata[i].shape[j][k].npos;
+				if (board[ recsite[k] ]) break;
+				
+				/* チェッカーのチェック */
+				if (site > 0 && 
+				putdata[i].shape[j][k].col != checker[kind_checker][recsite[k]]) 					break;
+			}
+			if (k != pats) continue;
+			
+			for (k = 0 ; k < pats ; k++) {
+				board[ recsite[k] ] = putdata[i].shape[j][k].col;
+				board_rec[ recsite[k] ] = i + 'a';
+			}
+			
+			tmp = site;
+			while (board[++tmp] != 0);
+			if (tmp > MAXPOS) {
+#if 0
+				board_disp(board);
+				board_rec_disp(board_rec);
+#endif
+				put_count++;
+				if (put_count > 1) return 1; /* 解が複数あれば抜ける */
+			} else {
+				if (site == 0) { /* チェッカーを決める */
+					if (board[0] == 1) kind_checker = 0;
+					else kind_checker = 1;
+				}
+				
+				if (sub( tmp ) == 1) return 1;
+			}
+			
+			for (k = 0 ; k < pats ; k++) {
+				board[ recsite[k] ] = 0;
+				board_rec[ recsite[k] ] = 0;
+			}
+			
+		}
+		p_flag[i] = 0;
+	}
+	return 0;
+}
+
+void start_sub(void)
+{
+	int i, j, k, n, s;
+	
+	for (i = 0; i < 8192 ; i++) { /* 2^13通りの塗り方 */
+		put_count = 0;
+		for (j = 0 ; j < 13 ; j++) p_flag[j] = 0;
+		board_init();
+		
+		for (j = 0; j < 13 ; j++) {
+			if (!(i & (1<<j))) {
+				piece_put[j].start = 0;
+				piece_put[j].end = putdata[j].paint;
+			} else {
+				piece_put[j].start = putdata[j].paint+1;
+				piece_put[j].end = putdata[j].n_shape-1;
+			}
+			if (piece_put[j].start > piece_put[j].end) break;
+		}
+		if (j != 13) continue;
+		
+		/* チェッカーの白、黒の数が32かどうか調べる */
+		n = 0;
+		for (j = 0; j < 13 ; j++) {
+			int pat = 5;
+			if (j == 12) pat = 4;
+			
+			s = 0;
+			for (k = 0; k < pat ; k++) {
+				if (putdata[j].shape[piece_put[j].start][k].col == 1) 
+					s++;
+			}
+			n += s;
+		}
+		if (n != 32) continue;
+
+		if (sub(0) == 0) {
+			if (put_count > 0) {
+				printf("解: 塗り方 %d (%d通り)\n", i, put_count);
+				for (j = 0; j < 13 ; j++) {
+					printf("(%d-%d) ", piece_put[j].start, piece_put[j].end);
+				}
+				puts("");
+			}
+		}
+	}
+}
+
+/* 白黒反転 */
+void colreverse(Pointxy p[])
+{
+	int i;
+
+	for (i = 0 ; i < 5 ; i++) {
+		p[i].col = -p[i].col;
+	}
+}
+
+/* 左右反転 */
+void reverse(Pointxy p[])
+{
+	int i;
+
+	for (i = 0 ; i < 5 ; i++) {
+		p[i].x = -p[i].x;
+	}
+}
+
+/* ９０度回転 */
+void rotate(Pointxy p[])
+{
+	int i, t;
+
+	for (i = 0 ; i < 5 ; i++) {
+		t = p[i].x;
+		p[i].x = -p[i].y;
+		p[i].y = t;
+	}
+}
+
+/* 昇順にソート */
+void sort(Point s[],int n)
+{
+	int i, j;
+	Point a;
+	
+	for (i = 0 ; i < n ; i++) {
+		for (j = n - 1 ; j > i ; j--) {
+			if (s[j].npos < s[j-1].npos) {
+				a = s[j];
+				s[j] = s[j-1];
+				s[j-1] = a;
+			}
+        }
+    }
+}
+
+/* XY座標を持つデータを１次元配列添え字用に変換 */
+void makeData(Putdata *putdata, Pointxy p[])
+{
+	int i, j, n;
+	Point tmp[5];
+	
+	n = putdata->n_shape;
+	for (i = 0 ; i < 5 ; i++) {
+		tmp[i].npos = pos(p[i].x, p[i].y);
+		tmp[i].col = p[i].col;
+    }
+    
+    sort(tmp, 5);
+    
+	for (i = 0 ; i < 5 ; i++) {
+		putdata->shape[n][i].npos = tmp[i].npos - tmp[0].npos;
+		putdata->shape[n][i].col = tmp[i].col;
+	}
+	for (i = 0 ; i < n ; i++) {   /* 同形チェック */
+		for (j = 0 ; j < 5 ; j++)
+			if (putdata->shape[n][j].npos != putdata->shape[i][j].npos || 
+				putdata->shape[n][j].col != putdata->shape[i][j].col)
+				break;
+		if (j == 5) return;
+	}
+	putdata->n_shape++;
+}
+
+/* 2種類の塗り方の区切りを見つける */
+void init_paint(void)
+{
+	int i;
+	
+	putdata[0].paint = 0;
+	putdata[1].paint = 1;
+	for (i = 2 ; i <= 11; i++) {
+		putdata[i].paint = putdata[i].n_shape / 2 - 1;
+	}
+	putdata[12].paint = 3;
+	putdata[3].paint = 0; /* F */
+}
+
+/* 12種類のピースに対して16パターン生成 */
+void init(void)
+{
+	int i, j;
+
+	for (i = 0 ; i < 12 ; i++) {
+		putdata[i].n_shape = 0;
+		for (j = 0 ; j < 4 ; j++) {
+			makeData( &putdata[i], piece[i] );
+			rotate( piece[i] );
+		}
+		
+		if (i == 0) continue; /* Xペントミノ */
+		
+		reverse( piece[i] );
+		for (j = 0 ; j < 4 ; j++) {
+			makeData( &putdata[i], piece[i] );
+			rotate( piece[i] );
+		}
+
+		/* 色反転 */
+		colreverse( piece[i] );
+		for (j = 0 ; j < 4 ; j++) {
+			makeData( &putdata[i], piece[i] );
+			rotate( piece[i] );
+		}
+		
+		reverse( piece[i] );
+		for (j = 0 ; j < 4 ; j++) {
+			makeData( &putdata[i], piece[i] );
+			rotate( piece[i] );
+		}
+		
+		/* 回転鏡像解を省くため、Fペントミノを制限する */
+		if (i == 3) {  
+			putdata[i].shape[1][0] = putdata[i].shape[8][0];
+			putdata[i].shape[1][1] = putdata[i].shape[8][1];
+			putdata[i].shape[1][2] = putdata[i].shape[8][2];
+			putdata[i].shape[1][3] = putdata[i].shape[8][3];
+			putdata[i].shape[1][4] = putdata[i].shape[8][4];
+			putdata[i].n_shape = 2;
+		}
+	}
+	
+	/* Iテトロミノ */
+	putdata[12].shape[0][0].npos = 0; putdata[12].shape[0][0].col = 1;
+	putdata[12].shape[0][1].npos = 1; putdata[12].shape[0][1].col = -1;
+	putdata[12].shape[0][2].npos = 2; putdata[12].shape[0][2].col = 1;
+	putdata[12].shape[0][3].npos = 3; putdata[12].shape[0][3].col = -1;
+
+	putdata[12].shape[1][0].npos = 0; putdata[12].shape[1][0].col = 1;
+	putdata[12].shape[1][1].npos = 9; putdata[12].shape[1][1].col = -1;
+	putdata[12].shape[1][2].npos = 18; putdata[12].shape[1][2].col = 1;
+	putdata[12].shape[1][3].npos = 27; putdata[12].shape[1][3].col = -1;
+
+	putdata[12].shape[2][0].npos = 0; putdata[12].shape[2][0].col = -1;
+	putdata[12].shape[2][1].npos = 1; putdata[12].shape[2][1].col = 1;
+	putdata[12].shape[2][2].npos = 2; putdata[12].shape[2][2].col = -1;
+	putdata[12].shape[2][3].npos = 3; putdata[12].shape[2][3].col = 1;
+
+	putdata[12].shape[3][0].npos = 0; putdata[12].shape[3][0].col = -1;
+	putdata[12].shape[3][1].npos = 9; putdata[12].shape[3][1].col = 1;
+	putdata[12].shape[3][2].npos = 18; putdata[12].shape[3][2].col = -1;
+	putdata[12].shape[3][3].npos = 27; putdata[12].shape[3][3].col = 1;
+
+	putdata[12].n_shape = 4;
+}
+
+void board_init(void)
+{
+	int i, j;
+	
+	for (i = 0 ; i < SIZE ; i++) {
+		for (j = 0 ; j < SIZE ; j++) {
+			if (i == SIZE-1 || j == SIZE-1) 
+				board[ pos(i,j) ] = '*';
+			else
+				board[ pos(i,j) ] = 0;
+				
+			if ( (i + j) % 2 == 0 ) 
+				checker[0][pos(i,j)] = 1;
+			else
+				checker[0][pos(i,j)] = -1;
+
+			if ( (i + j) % 2 != 0 ) 
+				checker[1][pos(i,j)] = 1;
+			else
+				checker[1][pos(i,j)] = -1;
+		}
+	}
+	board[ pos(SIZE-1,SIZE-1) ] = 0;  /* 番兵 */
+}
+
+int main(void)
+{
+	time_t s = time(NULL);
+	
+	board_init();
+	init();
+	init_paint();
+	start_sub();
+
+	s = time(NULL) - s;
+	printf("実行時間 %ld : %ld : %ld\n",(s/60)/60, (s/60)%60 , s % 60);
+	return 0;
+}
+

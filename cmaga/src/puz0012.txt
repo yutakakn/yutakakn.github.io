@@ -1,0 +1,268 @@
+/* 2000/11/19 - 11/23
+ *
+ * puz0012_smp.c    with gcc 2.95.2(TurboLinux Workstation 6.0)
+ * CMAGAZINE 2000/12 No.117[素性のよい数たち]
+ *
+ * Copyright (C)1996-2000 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+#define MAX 7        /* 項の個数 */
+
+#define NUM_MAX 100  /* 項の最大値 */
+#define SUM_MIN 100  /* 和の上限 */
+
+int primes[MAX + 1]; /* 7つの素数 */
+int num[MAX + 1];    /* 項 */
+int sum_min;         /* 和の最小値 */
+
+/* 素数判定用テーブル */
+#define PRIME_MAX 6000
+int primetable[PRIME_MAX] = {3, 5, 7};
+int prime_max;
+
+/* 解 */
+int ans_cnt = 0;
+int ans_num[10][MAX];
+
+/* 共有メモリ空間 */
+typedef struct {
+	int sum_min;
+	int ans_cnt;
+	int ans_num[10][MAX];
+} shared_mem_t;
+
+/* 解の表示 */
+void disp_answer(int *num)
+{
+	int primes[MAX];
+	int i, j, mul, sum;
+
+	sum = 0;
+	for (i = 0 ; i < MAX ; i++) {
+		sum += num[i];
+	}
+	for (i = 0 ; i < MAX-1 ; i++) {
+		printf("%d + ", num[i]);
+	}
+	printf("%d = %d\n", num[MAX-1], sum);
+
+	mul = num[0];
+	for (i = 1 ; i < MAX ; i++) {
+		mul *= num[i];
+	}
+	for (i = 0 ; i < MAX ; i++) {
+		primes[i] = mul / num[i] + num[i];
+	}
+
+
+	for (i = 0 ; i < MAX ; i++) {
+		printf("%2d + ", num[i]);
+		for (j = 0 ; j < MAX ; j++) {
+			if ((i != MAX-1 && j == MAX-1)  || (i == MAX-1 && j == MAX-2))
+				printf("%2d", num[j]);
+			else if (i != j)
+				printf("%2d * ", num[j]);
+		}
+		printf(" = %d\n", primes[i]);
+	}
+	printf("\n");
+}
+
+/* 与えれた数値が素数かどうか判別 */
+int is_prime(int n)
+{
+	int i, p;
+
+	if (n % 2 == 0) return 0;
+	
+	for (i = 0 ; i < prime_max ; i++) {
+		p = primetable[i];
+		if (p * p > n) break;
+		if (n % p == 0) return 0;
+	}
+	return 1;
+}
+
+/* is_prime()用に素数テーブルを作成 */
+void make_prime(void)
+{
+	int i, n;
+	
+	prime_max = PRIME_MAX;
+	i = 3;
+	n = 11;
+	while (i < PRIME_MAX) {
+		if (is_prime(n)) {
+			primetable[i++] = n;
+		}
+		n += 2;
+	}
+	prime_max = i;
+
+#if 0
+	for (i = 0 ; i < prime_max ; i++) 
+		printf("%d ", primetable[i]);
+	printf("\n");
+	exit(1);
+#endif
+}
+
+/* 探索処理 */
+int sub(int n, int sum, int rest)
+{
+	int p, t, i;
+
+	if (sum > sum_min)
+		return 0;
+
+	if (n >= MAX+1) {
+		if (rest != 1)
+			return 0;
+
+		if (sum < sum_min) {
+			sum_min = sum;
+			ans_cnt = 0;
+		}
+
+		for (i = 0 ; i < MAX ; i++) {
+			ans_num[ans_cnt][i] = num[i + 1];
+		}
+		ans_cnt++;
+		return 0;
+	}
+
+	for (num[n] = num[n-1] - 1 ; num[n] >= 1 ; num[n]--) {
+		if (rest < num[n]) 
+			continue;
+		if (rest % num[n]) 
+			continue;
+
+		p = (primes[n-1] - num[n-1]);
+		if (p % num[n]) 
+			continue;
+
+		t = p / num[n] * num[n-1] + num[n];
+		if (!is_prime(t)) 
+			continue;
+		primes[n] = t;
+
+		sub(n + 1, sum + num[n], rest / num[n]);
+	}
+	return 0;
+}
+
+int main(void)
+{
+	clock_t t = clock();
+	int i, j;
+	int shmid;
+	shared_mem_t *stuff;
+	void *buf;
+
+	/* 共有メモリセグメントを2KB割り当てる */
+	shmid = shmget(IPC_PRIVATE, 2048, IPC_CREAT | 0666);
+	if (shmid == -1) {
+		perror("shmget() error");
+		exit(1);
+	}
+	/* 共有メモリへアタッチする */
+	buf = shmat(shmid, NULL, 0);
+	if (buf == (void *)-1) {
+		perror("shmat() error");
+		exit(1);
+	}
+	stuff = (shared_mem_t *)buf;
+
+
+	make_prime(); 
+
+	sum_min = SUM_MIN;
+	ans_cnt = 0;
+
+	/*** デュアルCPU対応 ***/
+
+	if (fork() == 0) {  /* 子プロセスを生成 */
+		for (i = 0 ; i < prime_max / 2 ; i++) {
+			/* 素数の最小値は 727(=1*2*3*4*5*6+7) なので除外 */
+			if (primetable[i] < 727) continue;
+
+			primes[1] = primetable[i];
+			num[0] = 0;
+
+			for (num[1] = NUM_MAX ; num[1] > num[0] ; num[1]--) {
+				sub(2, num[1], primes[1] - num[1]);
+			}
+		}
+
+		/* 共有メモリへ解を格納 */
+		stuff->sum_min = sum_min;
+		stuff->ans_cnt = ans_cnt;
+		for (i = 0 ; i < ans_cnt ; i++) {
+			for (j = 0 ; j < MAX ; j++) {
+				stuff->ans_num[i][j] = ans_num[i][j];
+			}
+		}
+
+		/* 共有メモリをデタッチする */
+		if (shmdt(stuff) == -1) {
+			printf("fork(): shmdt() error\n"); exit(1);
+		}
+
+		exit(0);
+	} else {  /* 親プロセス */
+		for (i = prime_max / 2 ; i < prime_max ; i++) {
+			/* 素数の最小値は 727(=1*2*3*4*5*6+7) なので除外 */
+			if (primetable[i] < 727) continue;
+
+			primes[1] = primetable[i];
+			num[0] = 0;
+
+			for (num[1] = NUM_MAX ; num[1] > num[0] ; num[1]--) {
+				sub(2, num[1], primes[1] - num[1]);
+			}
+		}
+	}
+	wait(NULL);  /* 子プロセスが終了するのを待つ */
+
+	if (sum_min < stuff->sum_min) {  /* 親の結果のほうが小さい場合 */
+		printf("最小の和 %d\n", sum_min);
+		for (i = 0 ; i < ans_cnt ; i++) {
+			disp_answer(ans_num[i]);
+		}
+	} else if (sum_min > stuff->sum_min) { /* 子のほうが小さい場合 */
+		printf("最小の和 %d\n", stuff->sum_min);
+		for (i = 0 ; i < stuff->ans_cnt ; i++) {
+			disp_answer(stuff->ans_num[i]);
+		}
+	} else {  /* 親と子とも同じ結果の場合 */
+		printf("最小の和 %d\n", sum_min);
+		for (i = 0 ; i < ans_cnt ; i++) {
+			disp_answer(ans_num[i]);
+		}
+		for (i = 0 ; i < stuff->ans_cnt ; i++) {
+			disp_answer(stuff->ans_num[i]);
+		}
+	}
+
+	/* 共有メモリをデタッチする */
+	if (shmdt(stuff) == -1) {
+		printf("shmdt() error\n"); exit(1);
+	}
+	/* 共有メモリセグメントを削除する */
+	if (shmctl(shmid, IPC_RMID, 0) == -1) {
+		printf("shmctl() error\n"); exit(1);
+	}
+	
+    printf("time %.2f\n", (double)((clock() - t) / CLOCKS_PER_SEC));
+	return 0;
+}
+

@@ -1,0 +1,471 @@
+/*'99/4/4 - 4/17
+ *
+ *puz9904.c  with gcc 2.7.2.3 (VineLinux 0.9beta)
+ *Ｃマガジン '99/4月号『Ｃマガ電脳クラブ 第97回 -合同二分割-』
+ *
+ *Copyright (C)1995-1999 平田豊
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define XMAX 9
+#define YMAX 9
+#define XY (XMAX * YMAX)
+#define pos(x,y) ((x) + (y)*(XMAX+1))
+#define pos_map(x,y) ((x) + (y)*XMAX)
+
+#define HALF_SUM 22
+
+enum {
+	UP, DOWN, LEFT, RIGHT, END
+};
+
+char board[(XMAX+1)*(YMAX+1)];
+char map[XY], maps[XY], mapd[XY];
+int check[(XMAX+1)*(YMAX+1)];
+
+typedef struct point_t {
+	int x, y;
+	int dir;
+}Point;
+
+Point cuts[200];  /* 切り方のデータ */
+int n_cuts;
+int startx, starty;
+int kind;
+
+char board_table[][(XMAX+1)*(YMAX+1)] = {
+	{
+	-1,-1,-1,-1, 0, 0,-1,-1,-1,-1,
+	-1, 0, 1, 1, 1, 1, 0,-1,-1,-1,
+	 0, 1, 2, 2, 2, 2, 1,-1,-1,-1,
+	 0, 1, 2, 2, 2, 2, 1,-1,-1,-1,
+	-1, 1, 2, 2, 2, 2, 1,-1,-1,-1,
+	-1, 1, 2, 2, 2, 2, 1,-1,-1,-1,
+	-1, 1, 2, 2, 2, 2, 1,-1,-1,-1,
+	 0, 1, 2, 2, 2, 2, 1, 0,-1,-1,
+	 0, 1, 2, 2, 2, 2, 1, 0,-1,-1,
+	-1, 0, 1, 1, 1, 1, 0,-1,-1,-1,
+	},
+	{
+	-1, 0, 0,-1,-1,-1, 0, 0,-1,-1,
+	 0, 1, 1, 1, 1, 1, 1, 1, 0,-1,
+	 1, 2, 2, 2, 2, 2, 2, 2, 1,-1,
+	 1, 2, 2, 2, 2, 2, 2, 2, 1,-1,
+	 1, 2, 2, 2, 2, 2, 2, 2, 1, 0,
+	 1, 2, 2, 2, 2, 2, 2, 2, 1, 0,
+	 0, 1, 1, 1, 1, 1, 1, 1, 0,-1,
+	-1, 0, 0,-1,-1,-1,-1,-1,-1,-1,
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+	},
+	{
+	-1,-1,-1,-1,-1,-1,-1, 0, 0,-1,
+	-1, 0, 1, 1, 1, 1, 1, 1, 1, 0,
+	 0, 1, 2, 2, 2, 2, 2, 2, 2, 1,
+	 0, 1, 2, 2, 2, 2, 2, 2, 2, 1,
+	-1, 1, 2, 2, 2, 2, 2, 2, 2, 1,
+	-1, 1, 2, 2, 2, 2, 2, 2, 2, 1,
+	-1, 0, 1, 1, 1, 1, 1, 1, 1, 0,
+	-1,-1, 0, 0,-1,-1,-1, 0, 0,-1,
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+	-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+	},
+	{
+	-1, 0, 1, 1, 1, 1, 0,-1,-1,-1, 
+	 0, 1, 2, 2, 2, 2, 1, 0,-1,-1,
+	 0, 1, 2, 2, 2, 2, 1, 0,-1,-1,
+	-1, 1, 2, 2, 2, 2, 1,-1,-1,-1,
+	-1, 1, 2, 2, 2, 2, 1,-1,-1,-1,
+	-1, 1, 2, 2, 2, 2, 1,-1,-1,-1,
+	-1, 1, 2, 2, 2, 2, 1, 0,-1,-1,
+	-1, 1, 2, 2, 2, 2, 1, 0,-1,-1,
+	-1, 1, 1, 1, 1, 1, 1,-1,-1,-1,
+	-1,-1, 0, 0,-1,-1,-1,-1,-1,-1,
+	},
+};
+
+char map_table[][XY] = {
+	{
+	0, 0, 0, 0, 1, 0, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	1, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	1, 1, 1, 1, 1, 1, 1, 0, 0,
+	0, 1, 1, 1, 1, 2, 0, 0, 0,
+	},
+	{
+	0, 1, 0, 0, 0, 0, 1, 0, 0,
+	1, 1, 1, 1, 1, 1, 1, 1, 0,
+	1, 1, 1, 1, 1, 1, 1, 1, 0,
+	1, 1, 1, 1, 1, 1, 1, 1, 0,
+	1, 1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 2, 0,
+	0, 1, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	},
+	{
+	0, 0, 0, 0, 0, 0, 0, 1, 0,
+	0, 1, 1, 1, 1, 1, 1, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1, 1,
+	0, 1, 1, 1, 1, 1, 1, 1, 1,
+	0, 1, 1, 1, 1, 1, 1, 1, 1,
+	0, 1, 1, 1, 1, 1, 1, 1, 2,
+	0, 1, 0, 0, 0, 0, 0, 1, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	},
+	{
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	1, 1, 1, 1, 1, 1, 1, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 0, 0, 0,
+	0, 1, 1, 1, 1, 1, 1, 0, 0,
+	0, 1, 1, 1, 1, 2, 0, 0, 0,
+	0, 0, 1, 0, 0, 0, 0, 0, 0,
+	},
+};
+
+/* 左右反転 */
+void reverse(Point p[])
+{
+	int i;
+	
+	for (i = 0 ; i < HALF_SUM ; i++) {
+		p[i].x = -p[i].x;
+	}
+}
+
+/* ９０度回転 */
+void rotate(Point p[])
+{
+	int i, t;
+	
+	for (i = 0 ; i < HALF_SUM ; i++) {
+		t = p[i].x;
+		p[i].x = -p[i].y;
+		p[i].y = t;
+	}
+}
+
+/* 昇順にソート */
+void sort(int s[],int n)
+{
+	int i,j,a;
+
+	for (i = 0 ; i < n ; i++)
+		for (j = n - 1 ; j > i ; j--)
+        	if (s[j] < s[j-1]){
+				a = s[j];
+				s[j] = s[j-1];
+				s[j-1] = a;
+			}
+}
+
+void convert(Point p[], int conv[])
+{
+	static int tmp[ HALF_SUM ];
+	int i;
+	
+	for (i = 0 ; i < HALF_SUM ; i++)
+		tmp[i] = p[i].x + p[i].y * (XMAX + 1);
+	sort(tmp, HALF_SUM);
+	for (i = 0 ; i < HALF_SUM ; i++)
+		conv[i] = tmp[i] - tmp[0];
+}
+
+int compare(int s[], int d[])
+{
+	int i;
+	
+	for (i = 0 ; i < HALF_SUM ; i++)
+		if (s[i] != d[i]) return 1;
+	return 0;
+}
+
+/* maps[]とmapd[]をマッチング */
+int match(void)
+{
+	static int s_shape[HALF_SUM], d_shape[HALF_SUM];
+	static Point s_point[HALF_SUM], d_point[HALF_SUM];
+	int i, k;
+	
+	k = 0;
+	for (i = 0 ; i < XY ; i++) {
+		if (maps[i] == 1) {
+			s_point[k].x = i % XMAX;
+			s_point[k].y = i / XMAX;
+			k++;
+		}
+	}
+	convert(s_point, s_shape);
+	
+	k = 0;
+	for (i = 0 ; i < XY ; i++) {
+		if (mapd[i] == 1) {
+			d_point[k].x = i % XMAX;
+			d_point[k].y = i / XMAX;
+			k++;
+		}
+	}
+	convert(d_point, d_shape);
+	
+	/* 壁があると考えないとだめ */
+	for (i = 0 ; i < 4 ; i++) {     /* 4回転 */
+		if (compare(s_shape, d_shape) == 0)	return 1;
+		rotate( d_point );
+		convert(d_point, d_shape);
+	}
+	reverse( d_point );            /* 裏返し */
+	for (i = 0 ; i < 4 ; i++) {    /* 4回転 */
+		if (compare(s_shape, d_shape) == 0) return 1;
+		rotate( d_point );
+		convert(d_point, d_shape);
+	}
+	return 0;
+}
+
+void cuts_disp(void)
+{
+	static char *s[] = {"↑", "↓", "←", "→", "*"};
+	int i;
+	
+	for (i = 0 ; i < n_cuts ; i++) {
+		printf("(%d, %d) %s ", cuts[i].x, cuts[i].y, s[cuts[i].dir]);
+	}
+	puts("");
+}
+
+void map_disp(char m[])
+{
+	int x,y;
+
+	for(y=0;y<YMAX;y++) {
+		for (x=0;x<XMAX;x++)
+			printf("%d ", m[pos_map(x,y)]);
+		puts("");
+	}
+	puts("");
+}
+
+void disp()
+{
+	int i;
+
+	for (i = 0 ;i < n_cuts ; i++) {
+		printf("(%d,%d) %d- ",cuts[i].x,cuts[i].y,cuts[i].dir);
+	}
+	puts("");
+}
+
+int checkCut(int cx,int cy)
+{
+	int i;
+
+	for (i = 0 ; i < n_cuts ; i++) {
+		if (cuts[i].x == cx && cuts[i].y == cy)
+			return (i);
+	}
+	return (-2);
+}
+
+void makeTwo(void)
+{
+	int i;
+
+	memset(mapd, 0, sizeof(mapd));
+	memset(maps, 0, sizeof(maps));
+	for (i = 0 ; i < XY ; i++) {
+		if (map[i] == 1) mapd[i] = 1;
+		if (map[i] == 2) maps[i] = 1;
+	}
+}
+
+int makeArea(void)
+{
+	static int dir[][2] = {
+		{0,-1}, {0,1}, {-1,0}, {1,0}
+	};
+	int i,x,y,dx,dy,c,p1,p2;
+	int sum = 1;
+	int flag;
+
+	memcpy(map, map_table[kind], XY);
+
+	flag = 1;
+	while (flag) {
+		flag = 0;
+
+		for (y = 0 ; y < YMAX ; y++) 
+		for (x = 0 ; x < XMAX ; x++) {
+			c = pos_map(x,y);
+			if (map[c] == 2) {
+				for (i = 0 ; i < 4 ; i++) {
+					dx = x + dir[i][0];
+					dy = y + dir[i][1];
+					if ( !(dx>=0&&dx<XMAX) )continue;
+					if ( !(dy>=0&&dy<YMAX) )continue;
+					if (map[pos_map(dx,dy)] != 1) continue;
+
+					if (i == 0) {
+						p1 = checkCut(x,y);
+						p2 = checkCut(x+1,y);
+						if( (p1 != -2 && (p1 == p2-1 || 
+							p1 == p2+1))) continue;
+						map[pos_map(dx,dy)] = 2;
+						flag = 1;
+						sum++;
+					}
+					if (i == 1) {
+						p1 = checkCut(x,y+1);
+						p2 = checkCut(x+1,y+1);
+						if( (p1 != -2 && (p1 == p2-1 || 
+							p1 == p2+1))) continue;
+						map[pos_map(dx,dy)] = 2;
+						flag = 1;
+						sum++;
+					}
+					if (i == 2) {
+						p1 = checkCut(x,y);
+						p2 = checkCut(x,y+1);
+						if( (p1 != -2 && (p1 == p2-1 || 
+							p1 == p2+1))) continue;
+						map[pos_map(dx,dy)] = 2;
+						flag = 1;
+						sum++;
+					}
+					if (i == 3) {
+						p1 = checkCut(x+1,y);
+						p2 = checkCut(x+1,y+1);
+						if( (p1 != -2 && (p1 == p2-1 || 
+							p1 == p2+1))) continue;
+						map[pos_map(dx,dy)] = 2;
+						flag = 1;
+						sum++;
+					}
+
+				}
+			}
+		}
+
+	}
+	return (sum);
+}
+
+void loop(int n, int sx, int sy, int cnt)
+{
+	static int dir[][2] = {
+		{0,-1}, {0,1}, {-1,0}, {1,0}
+	};
+	int i, dx, dy, s;
+	
+	for (i = 0 ; i < 4 ; i++) {
+		dx = sx + dir[i][0];
+		dy = sy + dir[i][1];
+		if ( check[pos(dx,dy)] ) continue;
+		if ( !(dx>=0&&dx<=XMAX) || !(dy>=0&&dy<=YMAX) ) continue;
+		if (board[pos(dx,dy)] == -1 || board[pos(dx,dy)] == 0) continue;
+		if (board[pos(dx,dy)] == 1) {
+			if (cnt == 0) continue;
+			if (startx == dx && starty == dy) continue;
+			
+			cuts[n].x = sx;
+			cuts[n].y = sy;
+			cuts[n].dir = i;
+
+			cuts[n+1].x = dx;
+			cuts[n+1].y = dy;
+			cuts[n+1].dir = END;
+			
+			n_cuts = n + 2;
+
+			s = makeArea();
+			if (s == HALF_SUM) {
+				makeTwo();
+				if (match() == 1) {
+					map_disp(map); printf("sum %d\n",s); cuts_disp(); 
+					printf("*** 解 ***\n");
+				}
+			}
+			continue;
+		}
+		cuts[n].x = sx; cuts[n].y = sy; cuts[n].dir = i;
+		check[pos(sx,sy)] = 1;
+
+		loop(n + 1, dx, dy, cnt + 1);
+
+		check[pos(sx,sy)] = 0;
+		cuts[n].x = 0; cuts[n].y = 0; cuts[n].dir = 0;
+	}
+}
+
+void init_start(int sx, int sy)
+{
+	startx = sx; starty = sy;
+	printf("Start pos(%d,%d)\n", sx, sy);
+	memset(check, 0, sizeof(0));
+	loop(0, sx, sy, 0);
+}
+
+int main(void)
+{
+	time_t s = time(NULL);
+	
+	kind = 0;
+	printf("Board type %d\n", kind);
+	fflush(stdout);
+	memcpy(board, board_table[0], (XMAX+1)*(YMAX+1));
+	memcpy(map, map_table[0], XY);
+	init_start(6,2);
+	init_start(6,3);
+	init_start(6,4);
+	init_start(6,5);
+	init_start(6,6);
+	init_start(6,7);
+	init_start(6,8);
+
+	kind = 1;
+	printf("Board type %d\n", kind);
+	memcpy(board, board_table[1], (XMAX+1)*(YMAX+1));
+	memcpy(map, map_table[1], XY);
+	init_start(8,2);
+	init_start(8,3);
+	init_start(8,4);
+	init_start(8,5);
+
+	kind = 2;
+	printf("Board type %d\n", kind);
+	memcpy(board, board_table[2], (XMAX+1)*(YMAX+1));
+	memcpy(map, map_table[2], XY);
+	init_start(9,2);
+	init_start(9,3);
+	init_start(9,4);
+	init_start(9,5);
+
+	kind = 3;
+	printf("Board type %d\n", kind);
+	memcpy(board, board_table[3], (XMAX+1)*(YMAX+1));
+	memcpy(map, map_table[3], XY);
+	init_start(6,1);
+	init_start(6,2);
+	init_start(6,3);
+	init_start(6,4);
+	init_start(6,5);
+	init_start(6,6);
+	init_start(6,7);
+	init_start(6,8);
+
+	s = time(NULL) - s;
+	printf("実行時間 %ld : %ld : %ld\n",(s/60)/60, (s/60)%60 , s % 60);
+	return 0;
+}
+

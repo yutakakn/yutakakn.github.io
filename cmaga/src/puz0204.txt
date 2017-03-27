@@ -1,0 +1,194 @@
+/* 2002/3/27 - 3/30
+ *
+ * puz0204.c    with Visual C++ 6.0(Windows2000)
+ *
+ * CMAGAZINE 2002/04 No.133[小町の輪]
+ *
+ * Copyright (C)1996-2002 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+#include <assert.h>
+
+
+/*
+ * データ定義
+ */
+
+#define N 9                /* 数字の個数(1～N) */
+#define CIRCLE ((N+1)/2)   /* 円の数 */
+#define CROSS ((N-1)/2)    /* 円同士が交わる箇所数 */
+
+/*
+ * [1 <2] 3 [4> 5 <6] 7 [8> 9]
+ */
+int num[N + 1];   /* 円に格納する数字 */
+int use[N + 1];   /* 数字使用チェック用 */
+int sum;          /* 円内の合計 */
+
+int anscnt;       /* 解の数 */
+
+
+/*
+ * 関数定義
+ */
+
+void disp(void)
+{
+	int i;
+
+	for (i = 1 ; i <= N ; i++) {
+		printf("%d ", num[i]);
+	}
+	printf("\n");
+}
+
+
+/* まだ円に埋まっていない数字を決定する */
+void sub(int n)
+{
+	int i, s, index;
+
+	/* すべての数字が埋まったら */
+	if (n >= N - CROSS) {
+		/* 左右そっくり裏返したものは除外する */
+		if (num[1] > num[N])
+			return;
+
+		printf("(和%d) ", sum);
+		disp();
+
+		anscnt++;
+
+		return;
+	}
+
+	for (i = 1 ; i <= N ; i++) {
+		if (use[i])
+			continue;
+
+		index = n*2 + 1;
+		if (index == 1) {  /* 最左の円 */
+			if (i + num[index + 1] != sum)
+				continue;
+
+		} else if (index == N) {  /* 最右の円 */
+			if (num[index - 1] + i != sum)
+				continue;
+
+		} else {  /* 上記以外の円 */
+			s = num[index - 1] + i + num[index + 1];
+			if (s != sum)
+				continue;
+		}
+
+		use[i] = 1;
+		num[index] = i;
+
+		sub(n + 1);
+
+		num[index] = 0;
+		use[i] = 0;
+	}
+
+}
+
+
+/* 円同士が交差する箇所の数字を決め、円内の合計を求める。*/
+void make_sum(int n)
+{
+#define CROSS_POS(x) ((x)*2 + 2)
+	int i, k, s;
+
+	if (n >= CROSS) {
+		/*
+		 * 円内の合計は次の計算式から求められる。
+		 *
+		 *  Σnum[i] + Σnum[j]×2 = 円の数×円内の合計
+		 *  i=奇数     j=偶数
+		 *
+		 *  という式が成り立つ。
+		 *  num[1-9]は左から円の中の数字に相当し、1～9までの数字が
+		 *  ユニークに格納される。
+		 *  上記の式を変形すると、
+		 *
+		 *   9          8
+		 *  Σnum[k] + Σnum[j] = (9+1)/2 × 円内の合計
+		 *  k=1        j=偶数
+		 *
+		 *  ∴ 円内の合計 = (45 + Σnum[j]) / 5
+		 *
+		 */
+		s = 0;
+		for (i = 0 ; i < CROSS ; i++) {
+			s += num[CROSS_POS(i)];
+		}
+
+		s += (N*(N + 1)/2);
+		if (s % CIRCLE)
+			return;
+
+		sum = s / CIRCLE;    /* 円の中の合計 */
+
+		/* 決定した数値の両隣を足して、円内の合計値を超えるなら、
+		 * それ以上調べても無駄。
+		 */
+		for (i = 0 ; i < CROSS-1 ; i++) {
+			k = num[CROSS_POS(i)] + num[CROSS_POS(i) + 2];
+			if (k >= sum)
+				return;
+		}
+
+		/* 残りの数値を決める */
+		sub(0);
+
+		return;
+	}
+
+	/* 数字1～9を当てはめ、num[2],[4],[6],[8]を決定する */
+	for (i = 1 ; i <= N ; i++) {
+		if (use[i])
+			continue;
+
+		use[i] = 1;
+		num[CROSS_POS(n)] = i;
+
+		make_sum(n + 1);
+
+		num[CROSS_POS(n)] = 0;
+		use[i] = 0;
+	}
+
+}
+
+/* 初期化 */
+void init(void)
+{
+	int i;
+
+	for (i = 1 ; i <= N ; i++)
+		use[i] = 0;
+
+	sum = 0;
+	anscnt = 0;
+}
+
+int main(void)
+{
+	clock_t tick = clock();
+
+	init();
+	make_sum(0);
+
+	printf("解 %d とおり\n", anscnt);
+
+    printf("time %.2f\n", (double)(clock() - tick) / CLOCKS_PER_SEC);
+	return 0;
+}
+
+

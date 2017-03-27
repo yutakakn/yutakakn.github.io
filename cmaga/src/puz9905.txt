@@ -1,0 +1,114 @@
+/*'99/4/18
+ *
+ *puz9905.c  with gcc 2.7.2.3 (VineLinux 0.9beta)
+ *  CMAGAZINE 1999/5 No.98[à‚ì`éqêî]
+ *
+ *Copyright (C)1995-1999 ïΩìcñL
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+int sum[10][10][10];
+
+int use[10];
+int sel_num[10];
+int keta;
+
+long ten[] = {0, 1, 10, 100, 1000, 10000, 100000,
+	1000000, 10000000, 100000000, 1000000000};
+
+int check(long s)
+{
+	static int nuse[10];
+	int i, n;
+
+	memset(nuse, 0, sizeof(nuse));
+	if (s >= ten[keta+1] || s < ten[keta]) return 0;
+
+	for (i = keta ; i >= 1 ; i--) {
+		n = s / ten[i];
+		s %= ten[i];
+
+		if (nuse[n]) return 0;
+		nuse[n] = 1;
+		if (use[n] != 1) return 0;
+		use[n] = 1;
+	}
+	return 1;
+}
+
+long calc(void)
+{
+	int i,j,k;
+	long s;
+
+	s = 0L;
+	for (i = 0 ; i < keta-2 ; i++)
+	for (j = i+1 ; j < keta-1 ; j++)
+	for (k = j+1 ; k < keta ; k++) {
+		s += sum[sel_num[i]][sel_num[j]][sel_num[k]];
+	}
+	return( s );
+}
+
+void choose(int n, int prev)
+{
+	int i;
+	long s;
+
+	if (n >= keta) {
+		s = calc();
+		if (check(s) == 1) {
+			for(i=0;i<keta;i++) printf("%d ",sel_num[i]);
+			printf("  sum=%ld\n",s); 
+		}
+		return;
+	}
+
+	for (i = prev+1 ; i <= 9 ; i++) {
+		if (use[i]) continue;
+		use[i] = 1;
+		sel_num[n] = i;
+		choose(n + 1, i);
+		use[i] = 0;
+	}
+
+}
+
+void init(void)
+{
+	int i,j,k,s;
+
+	for (i = 1 ; i <= 7 ; i++)
+		for (j = i+1 ; j <= 8 ; j++)
+			for (k = j+1 ; k <= 9 ; k++) {
+				s = 0;
+				s += 100*i + 10*j + k;
+				s += 100*i + 10*k + j;
+				s += 100*j + 10*i + k;
+				s += 100*j + 10*k + i;
+				s += 100*k + 10*i + j;
+				s += 100*k + 10*j + i;
+				sum[i][j][k] = s;
+			}
+
+}
+
+int main(void)
+{
+	time_t s = time(NULL);
+
+	init();
+	for (keta = 3 ; keta <= 9 ; keta++) {  /* åÖêî */
+		memset(use, 0, sizeof(use));
+		choose(0, 0);
+	}
+
+	s = time(NULL) - s;
+	printf("é¿çséûä‘ %ld : %ld : %ld\n",(s/60)/60, (s/60)%60 , s % 60);
+	return 0;
+}
+

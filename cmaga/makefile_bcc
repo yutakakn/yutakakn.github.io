@@ -1,0 +1,22 @@
+#+---------------------------------------+
+#|makefile (for Borland C++Compiler5.5)  |
+#+---------------------------------------+
+
+PROGRAM = puzXXXX.c
+TARGET = a.exe
+
+CC = bcc32
+EXEC = -e$(TARGET)
+
+# -O1:小さいコード -O2:速いコード -Od:なし
+# -3:386 -4:486 -5:Pentium -6:Pentium Pro
+# -w:警告
+OPTION = -O2 -3 -w
+#OPTION = -O2 -3
+
+$(TARGET): $(PROGRAM)
+	$(CC) $(OPTION) $(EXEC) $(PROGRAM)
+	
+clean:
+	del $(TARGET)
+

@@ -1,0 +1,55 @@
+/*'97/2/21 - 2/23
+ *‚bƒ}ƒKƒWƒ“ '97/3Œ†w‚bƒ}ƒK“d”]ƒNƒ‰ƒu@‘æ‚V‚Q‰ñx@
+ *@with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9703.C
+ *
+ *•W‘èyg”’»“œz
+ *
+ *Copyright (C) 1995-1997 •½“c@–L(Yutaka Hirata)
+ *All rights reserved.
+ *E-mail:t9425088@jube.csedu.kobe-u.ac.jp
+ */
+#include <stdio.h>
+#include <limits.h>
+
+#define MAX 200L
+
+char *rcsIdentPuz9703 =
+"$ID: puz9703.c 1997/2/21 19:04:10 (C)Yutaka Hirata $";
+
+typedef unsigned long ulong;
+
+int cnt;   /* ‰ğ‚ÌŒÂ” */
+ulong max_num = ULONG_MAX;     /* Å‘å‰ğ */
+
+void sub(void)
+{
+	ulong n,x,y,z,white;
+
+	for(x = 3 ; x <= MAX ; x++)
+		for(y = x ; y <= MAX ; y++)
+			for(z = y ; z <= MAX ; z++){
+				n = x*y*z;
+				if(n & 1) continue;  /* Šï”‚Íœ‚­ */
+				if(n > max_num) break;
+
+				white = (x-2)*(y-2)*(z-2);  /* ”’»“œ‚ÌŒÂ” */
+
+				if(white > n / 2) break;
+				if(white == n / 2){
+					/*‰‰ğ‚ªÅ‘åŒÂ”‚Æ‚È‚é*/
+					if(cnt == 0) max_num = n;
+					cnt++;
+					printf("%2dŒÂ–Ú: %4lu = %lu x %lu x %lu\n",cnt,n,x,y,z);
+				}
+			}
+}
+
+int main(void)
+{
+	puts("‚bƒ}ƒKƒWƒ“ '97/3Œ†w‚bƒ}ƒK“d”]ƒNƒ‰ƒu@‘æ‚V‚Q‰ñx");
+	sub();
+	printf("ˆÈã‚æ‚è‰ğ %d ŒÂ\n",cnt);
+	return 0;
+}

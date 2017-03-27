@@ -1,0 +1,114 @@
+/*'98/10/24
+ *Ｃマガジン '98/11月号『Ｃマガ電脳クラブ　第92回』　
+ *　with LSIC-86 Ver.3.5
+ *
+ *puz9811.c
+ *標題【大町平方数】
+ *
+ *●makefile
+ *a.exe: puz9811.c
+ *	lcc86 -o a.exe puz9811.c
+ *
+ *●LSICについて
+ *　コンパイルを行うとエラーがでるがこれは c:\lsij\lsic86\bin\makedef で
+ *　CC = lcc86と修正することで直る。
+ *
+ *　math.hを使うには c:\lsij\lsic86\bin\_lcc86 の最終行を変更する。
+ *　　-lknjlib -lmathlib -ldoslib
+ *             ~~~~~~~~~追加（この位置でないとダメ）
+ *
+ *　makeコマンドは c:\lsij\lsic86\bin\kmmake.exeであるが make.exe と
+ *　リネームした方が使いやすい。
+ *
+ *　Windowsにインストールした場合ルートの autoexec.bat にパスを通す必要が
+ *　あるが、最後の行に call \lsij\lsic86\bin\env86.bat を追加するだけで
+ *　よい。こうすると、Windows起動時にバッチファイルの実行経過が見えてしま
+ *　うので、env86.batの最初の行に @echo off を入れておけば抑止される。
+ *
+ *Copyright (C)1995-1998 平田豊
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+int num[10];
+int use[10];
+
+void disp(void)
+{
+	int i;
+	
+	for (i = 0 ; i < 10 ; i++) printf("%d", num[i]);
+	puts("");
+}
+
+long reverse(long n)
+{
+	int i;
+	long rev, k;
+	
+	rev = 0;
+	k = 10000;
+	for (i = 0 ; i < 5 ; i++) {
+		rev += (n % 10) * k;
+		n /= 10;
+		k /= 10;
+	}
+	return( rev );
+}
+
+int sub(const long n)
+{
+	int i, c;
+	long a, cry, tmp;
+	
+	a = n;
+	cry = 0;
+	for (i = 0 ; i < 4 ; i++) {
+		tmp = (a % 10) * n + cry;
+		a /= 10;
+		c = num[9-i] = tmp % 10;
+		if (use[c]) return 0;
+		use[c] = 1;
+		cry = tmp / 10;
+	}
+	
+	tmp = a * n + cry;
+	for (i = 0 ; i < 6 ; i++) {
+		c = num[5-i] = tmp % 10;
+		if (use[c]) return 0;
+		use[c] = 1;
+		tmp /= 10;
+	}
+	
+	return 1;
+}
+
+int main(void)
+{
+	time_t s = time(NULL);
+	long n, rev;
+	
+	for (n = 31623; n <= 99999 ; n++) {
+		memset(use, 0, sizeof(use));
+		/* 万の位 ≦ 一の位 の数のみを選ぶ */
+		if ( (n / 10000) > (n % 10) ) continue;
+		/* 2乗計算 */
+		if ( sub(n) == 1 ) {
+			rev = reverse( n ); /* 逆数を求める */
+			if (n == rev) continue; /* 回文数チェック */
+			memset(use, 0, sizeof(use));
+			if ( sub(rev) == 1 ) {
+				printf("解： %ld * %ld = ", rev, rev);
+				disp();
+			}
+		}
+	}
+	
+	s = time(NULL) - s;
+	printf("実行時間 %ld : %ld : %ld\n",(s/60)/60, (s/60)%60 , s % 60);
+	return 0;
+}
+

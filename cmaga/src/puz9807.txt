@@ -1,0 +1,289 @@
+/*'98/7/11 - 7/14
+ *Ｃマガジン '98/7月号『Ｃマガ電脳クラブ　第88回』　
+ *　with LSIC-86 Ver.3.5
+ *
+ *puz9807.c
+ *標題【立方体の展開図】
+ *
+ *●makefile
+ *a.exe: puz9807.c
+ *	lcc86 -o a.exe puz9807.c
+ *
+ *●LSICについて
+ *　コンパイルを行うとエラーがでるがこれは c:\lsij\lsic86\bin\makedef で
+ *　CC = lcc86と修正することで直る。
+ *
+ *　math.hを使うには c:\lsij\lsic86\bin\_lcc86 の最終行を変更する。
+ *　　-lknjlib -lmathlib -ldoslib
+ *             ~~~~~~~~~追加（この位置でないとダメ）
+ *
+ *　makeコマンドは c:\lsij\lsic86\bin\kmmake.exeであるが make.exe と
+ *　リネームした方が使いやすい。
+ *
+ *　Windowsにインストールした場合ルートの autoexec.bat にパスを通す必要が
+ *　あるが、最後の行に call \lsij\lsic86\bin\env86.bat を追加するだけで
+ *　よい。こうすると、Windows起動時にバッチファイルの実行経過が見えてしま
+ *　うので、env86.batの最初の行に @echo off を入れておけば抑止される。
+ *
+ *Copyright (C)1995-1998 平田豊(Yutaka Hirata)
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define SIZE 32
+#define MAX_POS (SIZE * SIZE)
+#define POS(x,y) ((x) + (y)*SIZE)
+
+typedef struct {
+	int x,y;
+}Point;
+Point pos[11 + 1][6] = {     /* 展開図パターン */
+	{0,0, 1,0, 2,0, 1,1, 1,2, 1,3},
+	{0,0, -1,1, 0,1, 1,1, 0,2, 0,3},
+	{0,0, 1,0, 1,1, 1,2, 2,2, 2,3},
+	{0,0, 1,0, 0,1, 0,2, 0,3, -1,3},
+	{0,0, -2,1, -1,1, 0,1, 1,1, -2,2},
+	{0,0, -1,1, 0,1, 1,1, 2,1, 1,2},
+	{0,0, 0,1, 1,1, 1,2, 2,2, 2,3},
+	{0,0, -3,1, -2,1, -1,1, 0,1, -1,2},
+	{0,0, 1,0, 2,0, 2,1, 3,1, 4,1},
+	{0,0, 0,1, -1,1, -1,2, -1,3, -2,2},
+	{0,0, 0,1, 0,2, -1,2, 1,2, 1,3},
+	{0,0, 0,0, 0,0, 0,0, 0,0, 0,0},  /* これは隙間 */
+};
+
+typedef struct {      /* 展開図 */
+	int shape[8][6];  /* 最大８つのパターンデータ */
+	int n_shape;      /* パターン数 */
+}Putdata;
+Putdata putdata[11 + 1];
+
+char board[ SIZE * SIZE ];
+int width, height;
+int limitSite;
+int w1, h1;
+
+char use[12];
+char name[12] = "ABCDEFGHIJK\0";
+int empty;
+int min_empty;
+int use_cnt;
+
+void disp(int w, int h)
+{
+	char c;
+	int x, y;
+	
+	for (y = 0 ; y < h + 1; y++) {
+		for (x = 0 ; x < w + 1; x++) {
+			c = board[ POS(x,y) ];
+			if (c != 0)
+				printf("%c",c);
+			else
+				printf("_");
+		}
+		puts("");
+	}
+	puts("");
+}
+
+/* width × heightの長方形に１２ピースを置いていき探索 */
+int search(int site)
+{
+	int i, pat, j, k, tmp, recsite[6];
+	int x, y;
+	
+	x = site % SIZE;
+	y = site / SIZE;
+	if (use_cnt == 1) {
+		if (x > w1 || y > h1) return 0;
+	}
+	
+	for (i = 11 ; i >= 0 ; i--) {
+		if (use[i] > 0) continue;  /* 使用済み */
+		
+		if (i == 11) {   /* 隙間を置く */
+			/* 隙間は複数ありうるのでuse[]はonしない */
+			empty++;
+			if (empty > min_empty) {
+				empty--;
+				continue;
+			}
+		} else {         /* １１パターンの展開図を置く */
+			if (x >= width - 1 || y >= height - 1) break;
+		
+			use[i] = 1;
+			use_cnt++;   /* 置いたパターン数 */
+			
+		}
+			
+		pat = putdata[i].n_shape;
+		for (j = 0 ; j < pat ; j++) {
+			if (i == 11) goto SKIP;
+			
+			for (k = 0 ; k < 6 ; k++) {
+				recsite[k] = site + putdata[i].shape[j][k];
+				if (board[ recsite[k] ] != 0) break;
+			}
+			if (k != 6) continue;
+
+			for (k = 0 ; k < 6 ; k++)
+				board[ recsite[k] ] = name[i];
+
+			if ( use_cnt == 11 ) {
+				puts("解");
+				disp(width, height);
+				return 1;
+			} else {
+			SKIP:;
+				tmp = site;
+				while (board[++tmp] != 0) continue;
+				if (tmp <= limitSite) {
+					if (search(tmp) == 1) return 1;  /* 再帰 */
+				}
+			}
+			
+			if (i == 11) goto SKIP2;
+			for (k = 0 ; k < 6 ; k++)
+				board[ recsite[k] ] = 0;
+		}
+		
+		if (i != 11) {
+			use[i] = 0;
+			use_cnt--;
+		} else {
+		SKIP2:;
+			empty--;
+		}
+	}
+	return 0;
+}
+
+/* 長方形を生成する */
+void sub(void)
+{
+	int x, y, s;
+
+	for (s = 66 ; s <= 81 ; s++) {
+		min_empty = s - 66;       /* 隙間 */
+		printf("面積 %d 隙間 %d\n", s, min_empty);
+		for (width = 3 ; width <= 27 ; width++) {
+			height = s / width;
+			if (width > height) break;
+			if (width * height != s) continue;
+			
+			w1 = (width - 1) / 2;
+			h1 = (height - 1) / 2;
+			printf("width %d height %d w1 %d h1 %d\n", width, height, w1, h1);
+			
+			memset(use, 0, sizeof(use));
+			use[0] = 0;
+			limitSite = POS(width-1,height-1);
+			empty = 0;
+			use_cnt = 0;
+			
+			memset(board, '*', sizeof(board));
+			for (y = 0 ; y < height ; y++)
+				for (x = 0 ; x < width ; x++)
+					board[ POS(x,y) ] = 0;
+			board[ POS(width, height) ] = 0;
+			
+			if ( search( 0 ) == 1 ) goto END;  /* 解が見つかれば即終了 */
+		}
+	}
+END:;
+	printf("最小隙間 %d\n",min_empty);
+}
+
+/* 左右反転 */
+void reverse(Point p[])
+{
+	int i;
+	
+	for (i = 0 ; i < 6 ; i++) {
+		p[i].x = -p[i].x;
+	}
+}
+
+/* ９０度回転 */
+void rotate(Point p[])
+{
+	int i, t;
+	
+	for (i = 0 ; i < 6 ; i++) {
+		t = p[i].x;
+		p[i].x = -p[i].y;
+		p[i].y = t;
+	}
+}
+
+/* 昇順にソート */
+void sort(int s[],int n)
+{
+	int i,j,a;
+
+	for(i = 0 ; i < n ; i++)
+		for(j = n - 1 ; j > i ; j--)
+			if(s[j] < s[j-1]){
+				a = s[j];
+				s[j] = s[j-1];
+				s[j-1] = a;
+			}
+}
+
+/* XY座標を持つデータを１次元配列添え字用に変換 */
+void makeData(Putdata *putdata, Point p[])
+{
+	int tmp[6], i, j, n;
+	
+	n = putdata->n_shape;
+	for (i = 0 ; i < 6 ; i++)
+		tmp[i] = POS(p[i].x, p[i].y);
+	sort(tmp, 6);
+	for (i = 0 ; i < 6 ; i++)
+		putdata->shape[n][i] = tmp[i] - tmp[0];
+	for (i = 0 ; i < n ; i++) {
+		for (j = 0 ; j < 6 ; j++)
+			if (putdata->shape[n][j] != putdata->shape[i][j])
+				break;
+		if (j == 6) return;
+	}
+	putdata->n_shape++;
+}
+
+/* １２種類のピースに対して８パターン生成 */
+void init(void)
+{
+	int i, j;
+	
+	for (i = 0 ; i < 12 ; i++) {
+		putdata[i].n_shape = 0;
+		for (j = 0 ; j < 4 ; j++) {
+			makeData( &putdata[i], pos[i] );
+			rotate( pos[i] );
+		}
+		reverse( pos[i] );
+		for (j = 0 ; j < 4 ; j++) {
+			makeData( &putdata[i], pos[i] );
+			rotate( pos[i] );
+		}
+	}
+	
+}
+
+int main(void)
+{
+	time_t s = time(NULL);
+	
+	init();
+	sub();
+	
+	s = time(NULL) - s;
+	printf("実行時間 %ld : %ld : %ld\n",(s/60)/60, (s/60)%60 , s % 60);
+	
+	return 0;
+}
+

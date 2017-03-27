@@ -1,0 +1,576 @@
+/* 2002/7/13
+ *
+ * puz0207.c    with Visual C++ .NET(Windows2000)
+ *
+ * CMAGAZINE 2002/07 No.136[RUSH HOUR]
+ *
+ * Copyright (C)1996-2002 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+#include <assert.h>
+
+
+/*
+ * データ定義
+ */
+
+/* 盤面の大きさ */
+#define WIDTH 6
+#define HEIGHT 6
+#define SIZE (WIDTH * HEIGHT)
+#define POS(x,y) ((x) + (y)*WIDTH)
+
+/* 初期盤面 */
+char *board = {
+/*   012345    */
+	"JAA B "   /* 0 */
+	"JCD BK"   /* 1 */
+	"JCDXXK"   /* 2 */
+	"LLLE K"   /* 3 */
+	"  FEGG"   /* 4 */
+	"HHFII "   /* 5 */
+};
+
+#define EMPTY_PIECE ' '    /* 隙間 */
+#define MAX_PIECE 'L'      /* 最後のピース(A～L) */
+#define MYSELF_PIECE 'X'   /* 自分のピース */
+#define GOAL_SITE POS(5,2) /* 出口 */
+
+
+/* ピース情報 */
+enum dir_t {
+	YOKO,  /* ピースは横方向 */
+	TATE,  /* ピースは縦方向 */
+};
+
+typedef struct {
+	enum dir_t dir;   /* 向き */
+	int len;          /* 長さ */
+	int site;         /* 横向きならY座標，縦向きならX座標 */
+	int valid;        /* 有効フラグ(1=有効 0=無効) */
+} piece_t;
+
+piece_t pieces[256];
+
+
+
+/* ハッシュテーブル */
+#define HASH_SIZE 1048573  /* ハッシュサイズ(素数) */
+#define EMPTY_HASH (-1)
+#define OK_HASH 1
+#define DIV_PIECE 'F'
+
+typedef struct {
+	int empty;           /* ハッシュが空かどうかを示す */
+	int index[2];        /* 各ピースの位置情報
+	                        index[0]=A～DIV_PIECE
+	                        index[1]=DIV_PIECE+1～MAX_PIECE, MYSELF_PIECE 
+
+							6×6の盤面において，各ピースの先頭は 0～5 の位置に
+							あることから，位置情報は 3bit で表現できる。
+
+									 ←─── 18bit ────→
+                                     +---+---+---+---+---+---+
+							index[0] | F | E | D | C | B | A |
+                                     +---+---+---+---+---+---+
+									 ←─── 21bit ──────→
+                                     +---+---+---+---+---+---+---+
+							index[1] | X | L | K | J | I | H | G |
+                                     +---+---+---+---+---+---+---+
+
+							※32bitのうち，残りは無視
+						  */
+} hash_t;
+
+hash_t hash[HASH_SIZE];  /* ハッシュテーブル */
+
+
+
+/* 生成した盤面の情報 */
+#define REC_SIZE 5000
+typedef struct {
+	int step;      /* 手数 */
+	int index;     /* ハッシュインデックス */
+	int prev_cnt;  /* 1手前の盤面を指すハッシュインデックス */
+} record_t;
+
+record_t record[REC_SIZE]; /* 保存用生成盤面 */
+int rec_cnt;
+
+
+
+/*
+ * 関数定義
+ */
+
+/* ハッシュキーを求める */
+int get_hash_key(int *index)
+{
+	int key, cnt, num;
+
+	num = (index[0] << 16) + index[1];
+	num &= 0x0fffffff;
+
+	cnt = 0;
+	key = num % HASH_SIZE;
+
+	/* オープンアドレス法 */
+	do {
+		if (hash[key].empty == EMPTY_HASH || 
+			(hash[key].index[0] == index[0] && hash[key].index[1] == index[1])) {
+			return (key);
+		}
+
+		key++;
+		key %= HASH_SIZE;
+
+		cnt++;
+
+	} while (cnt < HASH_SIZE);
+
+	printf("ERROR: Hash full\n");
+	exit(1);
+}
+
+/* ハッシュテーブルへセットする */
+int set_hash(int *index)
+{
+	int key;
+
+	key = get_hash_key(index);
+
+	if (hash[key].empty == EMPTY_HASH) {
+		hash[key].empty = OK_HASH;
+		hash[key].index[0] = index[0];
+		hash[key].index[1] = index[1];
+		return (key);  /* ハッシュキーを返す */
+	}
+
+	return -1;   /* すでに登録済み */
+}
+
+/* ハッシュテーブルの初期化 */
+void init_hash(void)
+{
+	int i;
+
+	for (i = 0 ; i < HASH_SIZE ; i++) {
+		memset(&hash[i], 0, sizeof(hash_t));
+		hash[i].empty = EMPTY_HASH;
+	}
+}
+
+
+/* 盤面(board)から各ピースの位置情報(index)を取得する */
+void get_board_index(char *board, int *index)
+{
+	int ch, pos, site;
+	int val1, val2, count;
+
+	val1 = val2 = 0;
+	count = 0;
+
+	for (ch = 'A' ; ch <= MYSELF_PIECE ; ch++) {
+		if (ch > MAX_PIECE)
+			ch = MYSELF_PIECE;
+
+		for (pos = 0; board[pos] ; pos++) {
+			if (board[pos] == ch)
+				break;
+		}
+		if (board[pos] == 0)
+			continue;
+
+		if (pieces[ch].dir == YOKO)
+			site = pos % WIDTH;
+		else
+			site = pos / WIDTH;
+
+		if (ch <= DIV_PIECE) {
+			val1 |= (site << 3*count);
+			if (ch == DIV_PIECE)
+				count = -1;
+		} else {
+			val2 |= (site << 3*count);
+		}
+
+		count++;
+	}
+
+	index[0] = val1;
+	index[1] = val2;
+}
+
+
+/* 盤面の表示 */
+void print_board(char *board)
+{
+	int x, y;
+	char c;
+
+	for (y = 0 ; y < HEIGHT ; y++) {
+		for (x = 0 ; x < WIDTH ; x++) {
+			c = board[POS(x,y)];
+			printf("%c", c);
+		}
+		printf("\n");
+	}
+	printf("\n");
+}
+
+
+/* 生成した盤面をハッシュテーブルへ新規登録をする */
+int record_new_board(char *board, int step, int prev)
+{
+	int index[2], key;
+
+	get_board_index(board, index);
+	key = set_hash(index);
+
+	if (key == -1)
+		return 0;  /* すでに同じ盤面が登場した */
+	
+	assert(rec_cnt < REC_SIZE);
+	record[rec_cnt].index = key;
+	record[rec_cnt].step = step + 1;
+	record[rec_cnt].prev_cnt = prev;
+	rec_cnt++;
+
+	/* 出口に'X'が来れば終わり */
+	if (board[GOAL_SITE] == MYSELF_PIECE) {
+		return 1;
+	}
+
+	return 0;
+}
+
+
+/* ピース位置情報から盤面を復元する */
+void restore_board(int *index, char *board)
+{
+	int i, ch, val, pos;
+
+	for (i = 0 ; i < SIZE ; i++) {
+		board[i] = EMPTY_PIECE;
+	}
+	board[SIZE] = '\0';
+
+	val = index[0];
+	for (ch = 'A' ; ch <= MYSELF_PIECE ; ch++) {
+		if (ch > MAX_PIECE) {
+			ch = MYSELF_PIECE;
+		}
+		if (ch == DIV_PIECE + 1) {
+			val = index[1];
+		}
+
+		pos = val & 7;
+		val >>= 3;
+
+		if (pieces[ch].dir == YOKO) {
+			for (i = 0 ; i < pieces[ch].len ; i++) {
+				assert(board[POS(pos + i, pieces[ch].site)] == EMPTY_PIECE);
+				board[POS(pos + i, pieces[ch].site)] = (char)ch;
+			}
+		} else {
+			for (i = 0 ; i < pieces[ch].len ; i++) {
+				assert(board[POS(pieces[ch].site, pos + i)] == EMPTY_PIECE);
+				board[POS(pieces[ch].site, pos + i)] = (char)ch;
+			}
+		}
+	}
+
+}
+
+
+/* 初期盤面から最終盤面までの状態遷移を表示する */
+void disp_reverse(int n)
+{
+	int key;
+	char board[SIZE + 1];
+
+	if (n == -1)
+		return;
+
+	disp_reverse(record[n].prev_cnt);
+
+	key = record[n].index;
+	restore_board(hash[key].index, board);
+
+	if (record[n].step == 0)
+		printf("初期盤面\n");
+	else
+		printf("%d 手目\n", record[n].step);
+
+	print_board(board);
+}
+
+
+/* 幅優先探索を使って解を探す */
+void sub(void)
+{
+	int step, i, j, key, ch, val, pos;
+	int x, y;
+	char board[SIZE + 1];
+
+	/* 1手目から順に手数を増やしていく */
+	for (step = 0 ; step < 100 ; step++) {
+/*		printf("%d 手目検索中...\n", step + 1);*/
+
+		/* 1つ手前の盤面を取り出す */
+		for (i = rec_cnt - 1 ; i >= 0 ; i--) {
+			if (record[i].step < step)
+				break;
+
+			key = record[i].index;
+			restore_board(hash[key].index, board);
+
+
+			/* 各ピースを移動させてみる */
+			val = hash[key].index[0];
+			for (ch = 'A' ; ch <= MYSELF_PIECE ; ch++) {
+				if (ch > MAX_PIECE) {
+					ch = MYSELF_PIECE;
+				}
+				if (ch == DIV_PIECE + 1) {
+					val = hash[key].index[1];
+				}
+				pos = val & 7;
+				val >>= 3;
+
+				if (pieces[ch].dir == YOKO) {
+					/* 右スライド */
+					for (x = pos + pieces[ch].len ; x < WIDTH ; x++) {
+						if (board[POS(x, pieces[ch].site)] != EMPTY_PIECE) {
+							break;
+
+						} else {
+							/* ピース移動 */
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pos + j, pieces[ch].site)] = EMPTY_PIECE;
+							}
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(x - j, pieces[ch].site)] = (char)ch;
+							}
+
+							/* 盤面登録 */
+							if (record_new_board(board, step, i)) {
+								goto FINISH;
+							}
+
+							/* ピース移動戻し */
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(x - j, pieces[ch].site)] = EMPTY_PIECE;
+							}
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pos + j, pieces[ch].site)] = (char)ch;
+							}
+
+						} 
+					}
+
+					/* 左スライド */
+					for (x = pos - 1 ; x >= 0; x--) {
+						if (board[POS(x, pieces[ch].site)] != EMPTY_PIECE) {
+							break;
+
+						} else {
+							/* ピース移動 */
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pos + j, pieces[ch].site)] = EMPTY_PIECE;
+							}
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(x + j, pieces[ch].site)] = (char)ch;
+							}
+
+							/* 盤面登録 */
+							if (record_new_board(board, step, i)) {
+								goto FINISH;
+							}
+
+							/* ピース移動戻し */
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(x + j, pieces[ch].site)] = EMPTY_PIECE;
+							}
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pos + j, pieces[ch].site)] = (char)ch;
+							}
+						}
+					}
+
+				} else {
+					/* 下スライド */
+					for (y = pos + pieces[ch].len ; y < HEIGHT ; y++) {
+						if (board[POS(pieces[ch].site, y)] != EMPTY_PIECE) {
+							break;
+
+						} else {
+							/* ピース移動 */
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pieces[ch].site, pos + j)] = EMPTY_PIECE;
+							}
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pieces[ch].site, y - j)] = (char)ch;
+							}
+
+							/* 盤面登録 */
+							if (record_new_board(board, step, i)) {
+								goto FINISH;
+							}
+
+							/* ピース移動戻し */
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pieces[ch].site, y - j)] = EMPTY_PIECE;
+							}
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pieces[ch].site, pos + j)] = (char)ch;
+							}
+						}
+					}
+
+					/* 上スライド */
+					for (y = pos - 1 ; y >= 0; y--) {
+						if (board[POS(pieces[ch].site, y)] != EMPTY_PIECE) {
+							break;
+
+						} else {
+							/* ピース移動 */
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pieces[ch].site, pos + j)] = EMPTY_PIECE;
+							}
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pieces[ch].site, y + j)] = (char)ch;
+							}
+
+							/* 盤面登録 */
+							if (record_new_board(board, step, i)) {
+								goto FINISH;
+							}
+
+							/* ピース移動戻し */
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pieces[ch].site, y + j)] = EMPTY_PIECE;
+							}
+							for (j = 0 ; j < pieces[ch].len ; j++) {
+								board[POS(pieces[ch].site, pos + j)] = (char)ch;
+							}
+						}
+					}
+
+				}
+
+			}
+
+		}
+	}
+
+	printf("解が見つかりませんでした\n"); 
+	return;
+
+FINISH:;
+	printf("解: 最短 %d 手\n", step + 1);
+	disp_reverse(rec_cnt - 1);
+
+}
+
+
+/* ピースの取得 init()用 */
+char get_piece(int pos)
+{
+	if (pos < SIZE)
+		return (board[pos]);
+	else
+		return '\0';
+}
+
+
+/* 初期化 */
+void init(void)
+{
+	int ch, pos, dir, len, site;
+	int index[2], key;
+
+	/* 初期盤面から各ピース情報を抽出する */
+	memset(pieces, 0, sizeof(pieces));
+
+	for (ch = 'A' ; ch <= MYSELF_PIECE ; ch++) {
+		if (ch > MAX_PIECE)
+			ch = MYSELF_PIECE;
+
+		for (pos = 0; board[pos] ; pos++) {
+			if (board[pos] == ch)
+				break;
+		}
+		if (board[pos] == 0)
+			continue;
+
+		if (get_piece(pos + 1) == ch) {  /* 横方向 */
+			site = pos / WIDTH;
+			len = 1;
+			while (get_piece(++pos) == ch) {
+				len++;
+			}
+			dir = YOKO;
+
+		} else if (get_piece(pos + WIDTH) == ch) {  /* 縦方向 */
+			site = pos % WIDTH;
+			len = 1;
+			while (get_piece(pos += WIDTH) == ch) {
+				len++;
+			}
+			dir = TATE;
+
+		} else {
+			printf("ピース %c は1単位のみです(問題入力ミス)\n", ch);
+			exit(1);
+		}
+
+		pieces[ch].dir = dir;
+		pieces[ch].len = len;
+		pieces[ch].site = site;
+		pieces[ch].valid = 1;
+	}
+
+#if 0
+	for (ch = 0 ; ch < 256 ; ch++) {
+		if (pieces[ch].valid) {
+			printf("ピース %c (方向 %d 長さ %d 位置 %d)\n", 
+				ch, pieces[ch].dir, pieces[ch].len, pieces[ch].site);
+		}
+	}
+#endif
+
+
+	/* 初期盤面をハッシュテーブルへ登録 */
+	init_hash();
+
+	get_board_index(board, index);
+	key = set_hash(index);
+	assert(key != -1);
+	
+	rec_cnt = 0;
+	record[rec_cnt].index = key;
+	record[rec_cnt].step = 0;        /* 0手目 */
+	record[rec_cnt].prev_cnt = -1;   /* 直前の盤面はなし */
+	rec_cnt++;
+}
+
+
+int main(void)
+{
+	clock_t tick = clock();
+
+	init();
+	sub();
+
+    printf("time %.2f\n", (double)(clock() - tick) / CLOCKS_PER_SEC);
+	return 0;
+}
+
+

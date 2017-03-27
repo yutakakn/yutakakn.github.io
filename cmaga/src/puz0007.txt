@@ -1,0 +1,131 @@
+/* 2000/6/18 - 6/24
+ *
+ * puz0007.c    with Borland C++Compiler5.5
+ * CMAGAZINE 2000/7 No.112[ラドクリフの六角陣]
+ *
+ * Copyright (C)1996-2000 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+int hex[19];   /* 六角陣 */
+int use[20];   /* ピースの使用チェックフラグ */
+
+int ans_cnt = 0;  /* 解の個数 */
+
+int decides[19] = {  /* ピースの探索順番 */
+	0, 1, 100+2, 
+	3, 100+7, 
+	4, 5, 100+6, 100+11, 
+	8, 100+12, 100+16, 
+	9, 100+13, 100+10, 100+15, 100+14, 100+18, 100+17
+};
+
+typedef struct {
+	int num;
+	int comb[5];
+} comb_t;
+
+comb_t combs[19] = {  /* 和38から決定されるピース */
+	{0, },
+	{0, },
+	{2, 0,1},         /* 2 */
+	{0, },
+	{0, },
+	{0, },
+	{3, 3,4,5},       /* 6 */
+	{2, 0,3},         /* 7 */
+	{0, },
+	{0, },
+	{4, 7,8,9,11},   /* 10 */
+	{2, 2,6},        /* 11 */
+	{3, 1,4,8},      /* 12 */
+	{4, 2,5,9,16},   /* 13 */
+	{3, 12,13,15},   /* 14 */
+	{3, 1,5,10},     /* 15 */
+	{2, 7,12},       /* 16 */
+	{2, 16,18},      /* 17 */
+	{2, 11,15},      /* 18 */
+};
+
+
+void disp(void)
+{
+	printf("    %2d  %2d  %2d\n"
+	       "  %2d  %2d  %2d  %2d\n"
+	       "%2d  %2d  %2d  %2d  %2d\n"
+	       "  %2d  %2d  %2d  %2d\n"
+	       "    %2d  %2d  %2d\n",
+	       hex[0], hex[1], hex[2], hex[3], hex[4], hex[5], 
+	       hex[6], hex[7], hex[8], hex[9], hex[10], hex[11],
+	       hex[12], hex[13], hex[14], hex[15], hex[16],
+	       hex[17], hex[18]);
+}
+
+void sub(int n)
+{
+	int i, j, d, sum;
+	
+	if (n >= 19) {
+		/* 残っている条件をチェック */
+		if (hex[6] + hex[10] + hex[14] + hex[17] != 38) return;
+		if (hex[3] + hex[8] + hex[13] + hex[17] != 38) return;
+		if (hex[0] + hex[4] + hex[9] + hex[14] + hex[18] != 38) return;
+		
+		disp();
+		ans_cnt++;
+		printf("解 %d\n\n", ans_cnt);
+		return;
+	}
+	
+	/* 回転鏡像解の排除 */
+	if (n == 3) {
+		if (hex[0] > hex[2]) return;
+	}
+	if (n == 5) {
+		if (hex[2] > hex[7]) return;
+	}
+	if (n == 12) {
+		if (hex[0] > hex[16]) return;
+	}
+	
+	d = decides[n];
+	if (d < 100) {
+		/* 1～19を試す */
+		for (i = 1; i <= 19 ; i++) {
+			if (use[i]) continue;
+			use[i] = 1;
+			hex[d] = i;
+			sub(n + 1);
+			use[i] = 0;
+		}
+	} else {
+		/* 和38から求める */
+		d -= 100;
+		sum = 0;
+		for (j = 0 ; j < combs[d].num; j++) {
+			sum += hex[ combs[d].comb[j] ];
+		}
+		sum = 38 - sum;
+		if (sum >= 1 && sum <= 19 && use[sum] == 0) {
+			use[sum] = 1;
+			hex[d] = sum;
+			sub(n + 1);
+			use[sum] = 0;
+		}
+	}
+}
+
+int main(void)
+{
+	clock_t t = clock();
+	
+	sub(0);
+	
+    printf("time %f\n", (double)((clock() - t) / CLK_TCK));
+	return 0;
+}
+

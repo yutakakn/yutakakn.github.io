@@ -1,0 +1,251 @@
+/* 2002/5/25 - 5/31
+ *
+ * puz0206.c    with Visual C++ .NET(Windows2000)
+ *
+ * CMAGAZINE 2002/06 No.135[運のいい分数]
+ *
+ * Copyright (C)1996-2002 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+//#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+#include <assert.h>
+
+
+/*
+ * データ定義
+ */
+#define DEBUG 0
+#define ELEM(n) (sizeof(n) / sizeof(n[0]))
+
+
+/* 分数 */
+typedef struct {
+	int num;       /* 分子(numerator) */
+	int den;       /* 分母(denominator) */
+} fract_t;
+
+fract_t last[30];  /* 1桁の既約分数 */
+int last_cnt;
+
+int ans_cnt = 0;   /* 解の数 */
+
+
+/* 「運のいい分数」の分子・分母は最大9桁まで */
+#define KETA 10
+
+/* 候補となる分数の分子・分母の数字の組み */
+int num_buf[KETA];   
+int den_buf[KETA];
+
+int use[KETA];  /* 数値ユニークチェック */
+
+int den_use[KETA];
+
+
+/*
+ * 関数定義
+ */
+
+
+/* 最初に決定した既約分数の分子(num_buf[0])と，共通部(com)を掛け合わせ，
+ * 分子候補パターン(num_buf)に合致するかどうか調べる。
+ * 合致すれば，掛け合わせた結果を *nval へ格納する。
+ */
+int check_num_fract(int com, int keta, int *nval)
+{
+	int val, i, len;
+	char buf[KETA + 10], *p;
+
+	val = com * num_buf[0];
+	sprintf(buf, "%d", val);
+	len = strlen(buf);
+
+	if (len != keta)
+		return 0;
+
+	for (i = 0 ; i < keta ; i++) {
+		for (p = buf; *p ; p++) {
+			if ((*p - '0') == num_buf[i])
+				break;
+		}
+		if (*p == 0)
+			return 0;
+	}
+
+	*nval = val;
+
+	return 1;
+}
+
+
+/* 分母候補パターン(den_buf)から数字の組み合わせを生成する */
+void sort_den(int count, int keta, int value)
+{
+	int i;
+
+	if (count >= keta) {
+		int com, nval;
+
+		if (value % den_buf[0])
+			return;
+
+		/* b / a = b'・c / a'・c となる共通部(c)を求める */
+		com = value / den_buf[0];
+
+		if (!check_num_fract(com, keta, &nval)) 
+			return;
+
+		ans_cnt++;   /* 解としてカウントする */
+
+		printf("(%d) %d/%d (= %d*%d / %d*%d)\n", ans_cnt, nval, value, 
+			com, num_buf[0], com, den_buf[0]);
+
+		return;
+	}
+
+	for (i = 0 ; i < keta ; i++) {
+		if (den_use[i])
+			continue;
+
+		den_use[i] = 1;
+
+		sort_den(count + 1, keta, value*10 + den_buf[i]);  
+
+		den_use[i] = 0;
+	}
+
+}
+
+
+/* 運のいい分数の候補となる分子・分母のパターンを求める */
+void make_num_list(int pos, int keta)
+{
+	int n;
+
+	assert(pos < KETA);
+
+	if (pos >= keta) {
+#if DEBUG
+		int i;
+
+		for (i = 0 ; i < pos ; i++) {
+			printf("%d", num_buf[i]);
+		}
+		printf("\n");
+		for (i = 0 ; i < pos ; i++) {
+			printf("%d", den_buf[i]);
+		}
+		printf("\n\n");
+#endif
+
+		sort_den(0, keta, 0);
+
+		return;
+	}
+
+
+	for (n = 1 ; n <= 9 ; n++) {
+		if (use[n])
+			continue;
+
+		/* バッファには昇順となるように格納する */
+		if (pos >= 2 && num_buf[pos - 1] >= n)
+			continue;
+
+		num_buf[pos] = n;
+		den_buf[pos] = n;
+		use[n] = 1;
+
+		make_num_list(pos + 1, keta);
+
+		use[n] = 0;
+	}
+}
+
+
+/* 最大公約数(greatest common divisor)を求める */
+int gcd(int x, int y)
+{
+	int t;
+
+	while (y != 0) {
+		t = x % y;
+		x = y;
+		y = t;
+	}
+
+	return (x);
+}
+
+/* 初期化 */
+void init(void)
+{
+	int a, b, n;
+
+	n = 0;
+
+	/* 候補となる既約分数(b / a)を求めておく */
+	for (b = 1 ; b <= 9 ; b++) {
+		for (a = b + 1 ; a <= 9 ; a++) {
+			if (gcd(a, b) == 1) { /* 最大公約数が1なら既約分数 */
+
+				assert(n < ELEM(last));
+
+				last[n].num = b;
+				last[n].den = a;
+				n++;
+
+/*				printf("%d / %d\n", b, a);*/
+			}
+		}
+	}
+	last_cnt = n;
+
+	memset(use, 0, sizeof(use));
+}
+
+
+int main(void)
+{
+	clock_t tick = clock();
+	int i, keta;
+
+	init();
+
+	/* 「運のいい分数」は条件より，分子・分母の桁数が同じであり，
+	 * 1～9までの数値がユニークに登場する。
+	 * よって，桁数は2～9桁となる。1桁のものも「運のいい分数」と
+	 * なりえるが，問題文より1桁のものは含まれないと読める。
+	 */
+	for (keta = 2 ; keta <= 9 ; keta++) {
+		printf("%d 桁\n", keta);
+
+		for (i = 0 ; i < last_cnt ; i++) {
+			num_buf[0] = last[i].num;
+			den_buf[0] = last[i].den;
+			use[num_buf[0]] = 1;
+			use[den_buf[0]] = 1;
+
+#if DEBUG
+			printf("既約分数 %d / %d\n", last[i].num, last[i].den);
+#endif
+
+			make_num_list(1, keta);
+
+			use[num_buf[0]] = 0;
+			use[den_buf[0]] = 0;
+		}
+	}
+	
+	printf("解 %d とおり\n", ans_cnt);
+
+    printf("time %.2f\n", (double)(clock() - tick) / CLOCKS_PER_SEC);
+	return 0;
+}
+
+

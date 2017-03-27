@@ -1,0 +1,87 @@
+/*'97/9/26 - 9/27
+ *Ｃマガジン '97/10月号『Ｃマガ電脳クラブ　第７９回』　
+ *　with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9710.C
+ *
+ *標題【ひとふで数環】
+ *
+ *Copyright (C)1997 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ *<e-mail>yutaka@timpani.seg.kobe-u.ac.jp
+ *<URL>http://www25.seg.kobe-u.ac.jp/yutaka/
+ */
+#include <stdio.h>
+
+#define MAX 100     /* 調べるマス数 */
+
+int board[ 100 ];    /* 環 */
+int last;  /* 最長 */
+int max;
+
+void disp(void)
+{
+	int i;
+
+	for(i = 0 ; i < MAX ; i++)
+		printf("%d ",board[i]);
+	putchar('\n');
+}
+
+int sub(int next,int pos)
+{
+	int t1,t2;
+
+	if(next >= last){  /* すべて置けた */
+		int p;
+
+		/* 最長の先に1があるかどうか */
+		p = pos - next; if(p < 0) p += MAX;
+		if(board[ (pos+next)%MAX ] == 1 ||
+			board[p] == 1) return 1;
+		return 0;
+	}
+
+	t1 = (pos + next) % MAX;
+	if(board[t1] == 0){
+		board[t1] = next+1;
+		if(sub(next+1,t1)) return 1;
+		board[t1] = 0;
+	}else   /* lastまで置けなくても最大数を記録しておく */
+	if(board[t1] == 1 && next > max) max = next;
+
+	t2 = pos - next;
+	if(t2 < 0) t2 += MAX;
+	if(t1 == t2) return 0;
+
+	if(board[t2] == 0){
+		board[t2] = next+1;
+		if(sub(next+1,t2)) return 1;
+		board[t2] = 0;
+	}else
+	if(board[t2] == 1 && next > max) max = next;
+
+	return 0;
+}
+
+int main(void)
+{
+	long s,t;
+
+	puts("ＣMAGAZINE PUZZLE");
+	s = time(NULL);
+
+	board[0] = 1;        /* 1は決め打ち */
+	max = 0;             /* 最大数 */
+	last = MAX - 1;      /* 最長99までを試す */
+	printf("最長 %d までを探索中…\n",last);
+	if(sub(1,0)){
+		disp(); max = last;
+	}
+	printf("マス 100 で、最長 %d です\n",max);
+
+	t = time(NULL) - s;
+	printf("time %ld:%ld\n",t/60,t%60);
+
+	return 0;
+}

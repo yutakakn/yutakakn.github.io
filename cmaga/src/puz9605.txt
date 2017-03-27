@@ -1,0 +1,174 @@
+/*'96/4/21,4/27
+ *Ｃマガジン '96/5月号　『Ｃマガ電脳クラブ　第６２回』　
+ *  with Turbo C++ 4.0J for DOS
+ *
+ *PUZ9605.C
+ *
+ *「２４手」
+ *Copyright (C) 1995-1996 平田　豊(Yutaka Hirata)
+ *All rights reserved.
+ */
+/*
+標題：「２４手」
+
+解答：140229804通り
+
+使用機種：PC-9821 V7/S5KA (Pentium 75MHz)
+          PC-9801 DX2     (80286 12MHz)
+ＯＳ：MS-DOS 6.2
+コンパイラ：Turbo C++ 4.0J for DOS
+実行時間：0.01秒(V7)
+          0.16秒(DX2)
+
+・プログラムの説明
+
+　解法は、普通にコマ（1bitで表現）をずらしていって END_FLAG(=0xf) になればカ
+　ウントしリターンします。関数subがそれを行っていて、再帰コールをしています。
+　ところがよく考えると、コマを移動させるときに何回も同じ状態になります。
+　それをまた調べるのは無駄なので、テーブルを使って枝刈をします。
+　関数initはﾏｽｸﾋﾞｯﾄを作成し、関数make_table_junbiにて重複するコマの状態（
+　ﾌﾗｸﾞ）を調べます。次に関数make_tableにて、ある状態におけるコマの移動が何通
+　りあるかを関数subにて調べ、格納します。それが終わればmainの中でﾌﾗｸﾞを 0x3c0
+　にして、関数subをコールします。関数subの中では配列のtableを参照して、すでに
+　調べたﾌﾗｸﾞならば、そのｶｳﾝﾄをﾌﾟﾗｽしてリターンします。こうすることにより高速に
+　処理が行えます。
+　
+・感想
+　
+　初めてＣマガ電脳クラブへ投稿します。最初はなかなか答えが出ず、苦労しました。
+　答えがあっているかどうか怪しいのですが、答えが表示されたときは大変うれしかっ
+　たです。ビット操作などは'96/2月号の特集が参考になりました。
+
+*/
+#include <stdio.h>
+#include <time.h>
+
+#define END_FLAG 0x00f
+#define START_FLAG 0x3c0
+int bit[10+1];            /*ﾏｽｸﾋﾞｯﾄ*/
+int f;                    /*盤の状態を表すﾌﾗｸﾞ*/
+
+long cnt;                 /*何通りあるか？*/
+long table[1000];         /*各ﾌﾗｸﾞに対するﾃｰﾌﾞﾙ*/
+char f_check[1000];       /*重複ﾁｪｯｸ用ﾃｰﾌﾞﾙ*/
+
+void sub()
+{
+	int i;
+
+	if(f == END_FLAG){
+		cnt++;
+		return;
+	}
+
+	if(table[f] != -1 && table[f] !=0){   /*ﾃｰﾌﾞﾙを参照して高速に！*/
+		cnt += table[f];
+		return;
+	}
+
+	for(i=10 ; i>=2 ; i--){
+		if((f & bit[i]) && ((f & bit[i-1])==0)){
+			f &= ~bit[i];
+			f |= bit[i-1];
+
+			sub();
+
+			f &= ~bit[i-1];
+			f |= bit[i];
+		 }
+	}
+}
+
+void make_table()
+{
+	int i;
+
+	for(i=0;i<1000;i++){
+		if(table[i] == -1){   /*調べるﾌﾗｸﾞならば*/
+			cnt = 0;
+			f = i;
+			sub();
+			table[i] = cnt;
+			/*printf("ﾌﾗｸﾞ 0x%xは %ld 個。",i,cnt); */
+		}
+	}
+}
+
+void make_table_junbi()
+{
+	int i;
+
+	if(f == END_FLAG){
+		return;
+	}
+
+	for(i=10 ; i>=2 ; i--){
+		if((f & bit[i]) && ((f & bit[i-1])==0)){
+			f &= ~bit[i];
+			f |= bit[i-1];
+
+			if(f_check[f]){           /*重複するﾌﾗｸﾞを調べておく*/
+				table[f] = -1;
+				/*printf("f 0x%x ",f); */
+				f &= ~bit[i-1];
+				f |= bit[i];
+				continue;
+			}
+			f_check[f] = 1;
+
+			make_table_junbi();
+
+			f &= ~bit[i-1];
+			f |= bit[i];
+		}
+	}
+}
+
+void init()
+{
+	int i;
+
+	for(i=1;i<=10;i++){
+		bit[i] = 1<<(i-1);
+	}
+}
+
+int main()
+{
+	int i;
+
+	long t,t2;           /*時間測定用*/
+	long base_t,run_t;
+	int sec,tenmili;
+
+	puts("Ｃマガジン '96/5月号　『Ｃマガ電脳クラブ　第６２回』");
+
+	/*1/100秒の時間測定*/
+	base_t = run_t = 0;
+	t=time(NULL);
+	while(t==time(NULL));   /*針を０にする*/
+	t=time(NULL);
+	while(t==time(NULL))    /*１秒に何カウント?*/
+		base_t++;
+
+	init();
+	f = START_FLAG;
+	make_table_junbi();
+	make_table();
+
+	for(i=0;i<6;i++){       /* (i+1)*4手を調べる*/
+		f = 0x01e << i;
+		cnt = 0;
+		sub();
+		printf("ﾌﾗｸﾞ 0x%x : %d手 :答え %ld 通り\n",f,(i+1)*4,cnt);
+	}
+
+	t2=time(NULL);
+	while(t2==time(NULL))     /*端数時間のカウント*/
+		run_t++;
+	tenmili=100 - 100*run_t/base_t;
+	sec=t2 - t - 1;
+	printf("実行時間 : %d.%02d 秒\n",sec,tenmili);
+
+	return 0;
+}

@@ -1,0 +1,107 @@
+/* 2001/6/10 - 6/17
+ *
+ * puz0106.c    with gcc 2.95.2(TurboLinux Workstation 6.0)
+ *                   Borland C++Compiler 5.5.1(Windows2000)
+ *
+ * CMAGAZINE 2001/6 No.123[開き直り数]
+ *
+ * Copyright (C)1996-2001 平田豊
+ * All rights reserved.
+ */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <assert.h>
+#include <math.h>
+
+#define NDEBUG   /* for assert(3): assert機能を抑止する場合に定義する */
+
+#ifdef __GNUC__
+	#define INLINE inline
+#else
+	#define INLINE
+#endif
+
+typedef unsigned int UINT;
+
+int power[10];    /* 累乗数 */
+int keta;         /* 桁数 */
+int count;        /* 解の個数 */
+int cache[10];    /* 枝刈用のキャッシュ */
+
+
+int sub(int n, UINT sum, UINT num)
+{
+	int i, start;
+	UINT rest, val, tmp;
+
+	/* 枝刈 */
+	rest = keta - n + 1;
+	if (rest < 10) {
+		val = cache[rest];
+		tmp = num * val;
+
+		/* 残りの桁をすべて9にしても、元の数に届かないのであれば、
+		 * これ以上試しても無駄。
+		 */
+		if (sum + rest * power[9] < tmp) {
+			return 0;
+		}
+
+		/* これまでの合計がすでに元の数を超えているのならば処理を打ち切る。*/
+		if (sum > tmp) {
+			return 1;
+		}
+	}
+
+	if (n > keta) {
+		if (sum == num) {  /* 解 */
+			count++;
+			printf("%d\n", num);
+		}
+		return 0;
+	}
+
+	if (n == 1) {
+		start = 1;
+	} else {
+		start = 0;
+	}
+
+	for (i = start ; i <= 9 ; i++) {
+		if (sub(n + 1, sum + power[i], 10*num + i))
+			break;
+	}
+
+	return 0;
+}
+
+void init(void)
+{
+	int i;
+
+	power[0] = 0;
+	cache[0] = 1;
+	for (i = 1 ; i < 10 ; i++) {
+		power[i] = (int)pow(i, i);  /* 数字^数字を求めておく */
+		cache[i] = (int)pow(10, i);
+	}
+}
+
+int main(void)
+{
+	clock_t t = clock();
+
+	init();
+
+	for (keta = 1 ; keta <= 10 ; keta++) {
+/*		printf("%d 桁 ...\n", keta);*/
+		sub(1, 0, 0);
+	}
+	printf("開き直り数は %d とおり\n", count);
+
+    printf("time %.2f\n", (double)((clock() - t) / CLOCKS_PER_SEC));
+	return 0;
+}
+

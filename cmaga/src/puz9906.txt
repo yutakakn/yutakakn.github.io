@@ -1,0 +1,50 @@
+/*'99/5/22
+ *
+ *puz9906.c  with LSIC-86 Ver 3.5(Windows95)
+ *CMAGAZINE 1999/6 No.99[ŽOŠpŒ`‚ÌŠï–­‚Èˆê’v]
+ *
+ *Copyright (C)1995-1999 •½“c–L
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <math.h>
+
+#define MAX 100
+
+void sub(void)
+{
+	int a, b ,c, ab;
+	int s1,s2,s3;
+	long s;
+	
+	for (a = 1 ; a < MAX ; a++)
+		for (b = a ; b < MAX ; b++) {
+			ab = a + b;
+			for (c = b ; c < ab ; c++) {
+				if (ab <= c || b+c<=a || c+a<=b) continue;
+				
+				s1 = (-a + b + c);
+				s2 = (a - b + c);
+				s3 = (ab - c);
+				s = s1 * s2 * s3;
+				if (s % 16) continue;
+				if (ab + c == s / 16) {
+					printf("(%d,%d,%d)=%d\n", a, b, c, ab+c);
+				}
+			}
+		}
+}
+
+int main(void)
+{
+	time_t s = time(NULL);
+
+	sub();
+
+	s = time(NULL) - s;
+	printf("ŽÀsŽžŠÔ %ld : %ld : %ld\n",(s/60)/60, (s/60)%60 , s % 60);
+	return 0;
+}
+

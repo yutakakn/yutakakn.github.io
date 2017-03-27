@@ -1,0 +1,211 @@
+/*'98/8/25 - 8/29
+ *Ｃマガジン '98/9月号『Ｃマガ電脳クラブ　第90回』　
+ *　with LSIC-86 Ver.3.5
+ *
+ *puz9809.c
+ *標題【端数よりダンゴ】
+ *
+ *●makefile
+ *a.exe: puz9809.c
+ *	lcc86 -o a.exe puz9809.c
+ *
+ *●LSICについて
+ *　コンパイルを行うとエラーがでるがこれは c:\lsij\lsic86\bin\makedef で
+ *　CC = lcc86と修正することで直る。
+ *
+ *　math.hを使うには c:\lsij\lsic86\bin\_lcc86 の最終行を変更する。
+ *　　-lknjlib -lmathlib -ldoslib
+ *             ~~~~~~~~~追加（この位置でないとダメ）
+ *
+ *　makeコマンドは c:\lsij\lsic86\bin\kmmake.exeであるが make.exe と
+ *　リネームした方が使いやすい。
+ *
+ *　Windowsにインストールした場合ルートの autoexec.bat にパスを通す必要が
+ *　あるが、最後の行に call \lsij\lsic86\bin\env86.bat を追加するだけで
+ *　よい。こうすると、Windows起動時にバッチファイルの実行経過が見えてしま
+ *　うので、env86.batの最初の行に @echo off を入れておけば抑止される。
+ *
+ *Copyright (C)1995-1998 平田豊(Yutaka Hirata)
+ *All rights reserved.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define KETA 200             /* 0をはさむ最大個数 */
+#define N (KETA/4)
+
+int num[N + 2], ans[N + 2];  /* 多桁計算用 */
+
+typedef struct {    /* 1～9から選ばれた2つの数字の情報 */
+	int x, y;
+	int yx;
+	int ok;         /* 割り切れる場合がある(=1)、存在しない(=0) */
+	int zerolen;    /* 解が存在する場合の挟み込む0の数 */
+}comb_t;
+
+comb_t comb[ 81 ];
+int comb_cnt;       /* comb[]の数(＜81) */
+
+void disp(int *s)
+{
+	int i;
+	
+	for (i = 0 ; i < N ; i++) {
+		printf("%04d ",s[i]);
+	}
+	puts("");
+}
+
+/* 多桁計算（除算） */
+int bigDiv(int *a,int b,int *c)
+{
+	int i;
+	long t, rem = 0L;
+	
+	for (i = 0 ; i < N ; i++) {
+		t = a[i] + rem;
+		c[i] = t / b;
+		rem = (t % b) * 10000L;
+	}
+	
+	return( rem != 0L );
+}
+
+/* X00..0Yの形を作る */
+void makeXZY(int zero, int x, int y)
+{
+	static int ten[4] = {1, 10, 100, 1000};
+	int i, a, b;
+	
+	a = (zero + 1) / 4;
+	b = (zero + 1) % 4;
+	for (i = 0 ; i < N ; i++) num[i] = 0;
+	num[N - 1 - a] = x * ten[ b ];
+	num[N - 1] += y;
+}
+
+/* 無限に割れないことを調べる。
+ *  割れるわけないやん(=1), 否(=0)
+ */
+int infiniteCheck(comb_t cm)
+{
+	int pat[10] , npat;
+	int i, j, a, b, rem;
+	
+	makeXZY(KETA - 2, cm.x, cm.y);
+	rem = bigDiv(num, cm.yx , ans);
+	if (rem == 0) {
+		return 0;
+	}
+	
+	for (j = N - 2 ; j >= 0 ; j--) 
+		if (ans[N - 1] == ans[j]) break;
+	npat = 0;
+	for (i = j + 1 ; i < N ; i++) {
+		pat[npat++] = ans[i];
+	}
+	
+	b = 0;
+	for (i = j - npat + 1 ; i >= 0 ; i -= npat) {
+		for (a = 0 ; a < npat ; a++) 
+			if (ans[i + a] != pat[a]) break;
+		if (a == npat) {
+			b++;
+		}
+	}
+	
+	if (b > 5) 
+		return 1;
+	return 0;
+}
+
+/* 探索 */
+void sub(void)
+{
+	int i, j, zero, max_zero, rem;
+
+	max_zero = 1;
+	for (zero = 1 ; zero <= KETA-2 ; zero++) {
+		for (i = 0 ; i < comb_cnt ; i++) {
+			/* 解が存在したものは無視 */
+			if (comb[i].ok == 0) continue;
+			
+			/* X00..0Yの形を作る */
+			makeXZY(zero, comb[i].x , comb[i].y);
+			
+			/* X00..0Y ÷ YX を計算 */
+			rem = bigDiv(num, comb[i].yx, ans);
+			if (rem == 0) { /* 割り切れた */
+				comb[i].zerolen = max_zero = zero;
+				comb[i].ok = 0;
+			}
+		}
+	}
+	
+	j = 0;
+	for (i = 0 ; i < comb_cnt ; i++)
+		if (comb[i].ok == 1) {
+			if ( !infiniteCheck( comb[i] ) ) {
+				j++;
+			}
+		}
+	if (j > 0) {
+		printf("まだ解が存在しうるものが %d 個残っています\n", j);
+		/* KETA の値を大きくすること */
+	}
+	
+	printf("0の最長 %d\n", max_zero);
+	for (i = 0 ; i < comb_cnt ; i++) 
+		if (comb[i].zerolen == max_zero) {
+			printf("X %d Y %d\n", comb[i].x, comb[i].y);
+			makeXZY(max_zero, comb[i].x, comb[i].y);
+			bigDiv(num, comb[i].yx, ans);
+			disp(num); 
+			printf("÷ %d ＝\n", comb[i].yx);
+			disp( ans );
+		}
+}
+
+/* X00..0Y と YX の関係を調べる。*/
+int valid_check(int x, int y)
+{
+	int i, n;
+	
+	for (i = 1 ; i <= 9 ; i++) {
+		n = x * i;
+		n %= 10;
+		if (n == y) break;
+	}
+	if (i == 10)
+		return 0;
+	return 1;
+}
+
+int main(void)
+{
+	time_t s = time(NULL);
+	int x, y, i;
+	
+	/* あらかじめ解が存在しないものを省く */
+	i = 0;
+	for (y = 1 ; y <= 9 ; y++)
+		for (x = 1 ; x <= 9 ; x++) {
+			if (valid_check(x, y) == 0) continue;
+			printf("(%d, %d) ", x, y);
+			comb[i].x = x;
+			comb[i].y = y;
+			comb[i].yx = 10 * y + x;
+			comb[i].ok = 1;
+			comb[i].zerolen = 0;
+			i++;
+		}
+	comb_cnt = i;
+	
+	sub();
+	
+	s = time(NULL) - s;
+	printf("実行時間 %ld : %ld : %ld\n",(s/60)/60, (s/60)%60 , s % 60);	
+	return 0;
+}
+
