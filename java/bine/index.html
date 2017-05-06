@@ -1,0 +1,125 @@
+<HTML>
+<HEAD>
+<TITLE>Java Binary Editor</TITLE>
+</HEAD>
+<BODY bgcolor=#ffffff text=#505050>
+
+<center>
+<h1>バイナリエディタ</h1>
+</center>
+<hr width="80%" align="center">
+
+<font size="4">
+<ul>
+ <li><a href="bine.zip">ダウンロードする(bine.zip 219KB)</a>
+</ul>
+</font>
+
+<p></p>
+
+
+<table border="1" bgcolor="#f0e0e0">
+<tr><td>
+<b><font size="4" color="maroon">画面イメージ</font></b>
+</td></tr>
+</table>
+
+<ul>
+<img src="bine.png" alt="bine.png" width="518" height="357">
+</ul>
+
+<p></p>
+
+
+<table border="1" bgcolor="#f0e0e0">
+<tr><td>
+<b><font size="4" color="maroon">説明</font></b>
+</td></tr>
+</table>
+
+<table border="1">
+<tr>
+<td width="15%">種別</td><td>Javaアプリケーション</td>
+</tr>
+
+<tr>
+<td>概要</td>
+<td>
+SJIS/EUC漢字コードに対応したオーソドックスなバイナリエディタです。
+
+</td>
+</tr>
+
+<tr>
+<td>起動方法</td>
+<td>
+アーカイブを解凍すると j2run.exe があります。<br>
+<u>そのj2run.exeを実行することでバイナリエディタを起動することができます。</u>デフォルトの設定ではMS製JavaVM
+のWJView.exeを使用します。WJView.exeはInternet Explorer 4.0/5.5をインストールすると付いてくるもの
+なので、使用するマシンにIEが入ってないと動きません。<p>
+
+j2run.exeは設定ファイル(j2run.init)の内容にしたがって、指定されたJavaVMでJavaプログラムを
+起動するものです。<br>
+j2run.iniを修正することで使用するJavaVMの種類を変更することができます。デフォルトでは設定内容は
+以下のようになってますが、
+
+<table border="1" width="75%" bgcolor="#c8d8b0">
+<tr><td><pre>
+# Java Binary Editor 起動用設定ファイル
+
+JVM=wjview.exe
+TARGET=class\Bine.class
+</pre></td></tr>
+</table>
+
+上記を次のように修正すると、Java2 SDKを使用して起動するようになります。
+
+<table border="1" width="75%" bgcolor="#c8d8b0">
+<tr><td><pre>
+# Java Binary Editor 起動用設定ファイル
+
+JVM=javaw.exe -jar
+TARGET=jar\Bine.jar
+</pre></td></tr>
+</table>
+
+なお、"#"はコメントです。<p>
+
+&lt;jar&gt; と &lt;class&gt; ディレクトリにJavaプログラムが格納されています。お使いの環境に
+すでにJava環境がインストールされているのであれば、j2run.exeを使わずともコマンドラインから手動で
+起動することも可能です。
+</td>
+</tr>
+
+<tr>
+<td>操作方法</td><td>
+<ul>
+ <li>↑↓←→　　・・・　カーソルの移動
+ <li>Insert　　　・・・　上書き/挿入モードの切り替え
+ <li>0～9, A～F　・・・　コードの入力
+</ul>
+</td>
+</tr>
+
+<tr>
+<td>動作環境</td>
+<td>
+本プログラムはJava2とJDK 1.1に対応しています。動作確認を行ったJavaVMは以下のとおりです。
+プラットフォームはいずれもWindows 2000(+SP1)です。
+<ul>
+ <li>Java2 SDK 1.3.0_01
+ <li>WebGain Java Compiler with JDK 1.2
+ <li>WebGain JDK 1.1.7A
+ <li>Microsoft JView 5.00.3310(JDK 1.1.4相当)
+</ul>
+</td>
+</tr>
+
+</table>
+<p></p>
+
+<hr>
+<a href="../index.html">戻る</a>
+
+</BODY>
+</HTML>
